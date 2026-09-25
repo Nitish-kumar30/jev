@@ -7,6 +7,7 @@ import SettingsMenu from './components/SettingsMenu';
 import { Toasts } from './components/ui';
 import { useMode } from './lib/ModeContext';
 import RaceTab from './tabs/race/RaceTab.jsx';
+import GateTab from './tabs/gate/GateTab.jsx';
 
 const TABS = [
   { id: 'race', label: 'Ticket Sorting Race' },
@@ -59,7 +60,7 @@ export default function App() {
             transition={{ duration: 0.25 }}
             className="mx-auto mt-12 w-full max-w-6xl px-5"
           >
-            {tab === 'race' ? <RaceTab /> : <PlaceholderPanel tab={tab} />}
+            {tab === 'race' ? <RaceTab /> : <GateTab />}
           </motion.section>
         </AnimatePresence>
       </main>
@@ -69,12 +70,3 @@ export default function App() {
   );
 }
 
-// Replaced by the Agent Safety Gate in the next commit.
-function PlaceholderPanel({ tab }) {
-  return (
-    <div className="glass rounded-2xl p-10 text-center text-slate-400">
-      <p className="font-mono text-xs uppercase tracking-[0.2em]">Coming up next</p>
-      <p className="mt-2 text-slate-300">{tab === 'race' ? 'Ticket Sorting Race' : 'Agent Safety Gate'}</p>
-    </div>
-  );
-}
