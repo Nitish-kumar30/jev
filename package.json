@@ -1,0 +1,34 @@
+{
+  "name": "jev-vs-chatbot",
+  "version": "0.1.0",
+  "description": "Interactive demo: how the Jev decision model differs from an LLM chatbot.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nitish-kumar30/jev.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Nitish-kumar30/jev/issues"
+  },
+  "homepage": "https://github.com/Nitish-kumar30/jev#readme",
+  "dependencies": {
+    "framer-motion": "^13.4.3",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@vitejs/plugin-react": "^6.1.1",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.1"
+  },
+  "private": true,
+  "type": "module"
+}
