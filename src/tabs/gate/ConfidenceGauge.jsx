@@ -33,8 +33,16 @@ export default function ConfidenceGauge({ value, decision }) {
           transition={{ type: 'spring', stiffness: 90, damping: 20 }}
           style={{ filter: `drop-shadow(0 0 8px ${color})` }}
         />
-        {/* 70% threshold marker */}
-        <line x1="80" y1="8" x2="80" y2="22" stroke="rgba(255,255,255,0.35)" strokeWidth="2" transform="rotate(36 80 80)" />
+        {/* Marker at the 70% confidence threshold (54 degrees up from the right). */}
+        <line
+          x1="110.6"
+          y1="37.9"
+          x2="116.4"
+          y2="29.8"
+          stroke="rgba(255,255,255,0.45)"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
       </svg>
       <div className="-mt-6 text-center">
         <div className="font-mono text-3xl" style={{ color }}>
