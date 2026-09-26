@@ -4,9 +4,14 @@
  * Its only jobs: hold the API keys (they never reach the browser) and
  * forward requests through the adapters in ./adapters.
  */
-import 'dotenv/config';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
+
+const serverDir = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(serverDir, '.env') });
 import { hasJevKey, jevClassify, jevGate } from './adapters/jev.js';
 import { hasLlmKey, llmClassify } from './adapters/llm.js';
 
@@ -33,7 +38,7 @@ const requireKey = (present, name) => (req, res, next) => {
 
 const asText = (value) => (typeof value === 'string' ? value.trim() : '');
 
-app.post('/api/jev/classify', requireKey(hasJevKey, 'JEV_API_KEY'), async (req, res) => {
+app.post('/api/jev/classify', requireKey(hasJevKey, 'OPENROUTER_API_KEY'), async (req, res) => {
   const message = asText(req.body?.message);
   if (!message) return res.status(400).json({ error: 'message is required' });
   try {
@@ -43,7 +48,7 @@ app.post('/api/jev/classify', requireKey(hasJevKey, 'JEV_API_KEY'), async (req, 
   }
 });
 
-app.post('/api/llm/classify', requireKey(hasLlmKey, 'LLM_API_KEY'), async (req, res) => {
+app.post('/api/llm/classify', requireKey(hasLlmKey, 'OPENROUTER_API_KEY'), async (req, res) => {
   const message = asText(req.body?.message);
   if (!message) return res.status(400).json({ error: 'message is required' });
   try {
@@ -53,7 +58,7 @@ app.post('/api/llm/classify', requireKey(hasLlmKey, 'LLM_API_KEY'), async (req, 
   }
 });
 
-app.post('/api/jev/gate', requireKey(hasJevKey, 'JEV_API_KEY'), async (req, res) => {
+app.post('/api/jev/gate', requireKey(hasJevKey, 'OPENROUTER_API_KEY'), async (req, res) => {
   const action = asText(req.body?.action);
   if (!action) return res.status(400).json({ error: 'action is required' });
   // Only forwarded when the caller explicitly opts in — see the adapter note.
@@ -67,5 +72,7 @@ app.post('/api/jev/gate', requireKey(hasJevKey, 'JEV_API_KEY'), async (req, res)
 
 app.listen(PORT, () => {
   console.log(`[server] listening on http://localhost:${PORT}`);
-  console.log(`[server] JEV_API_KEY ${hasJevKey() ? 'set' : 'MISSING'} · LLM_API_KEY ${hasLlmKey() ? 'set' : 'MISSING'}`);
+  console.log(
+    `[server] OPENROUTER_API_KEY ${hasJevKey() && hasLlmKey() ? 'set' : 'MISSING'}`
+  );
 });

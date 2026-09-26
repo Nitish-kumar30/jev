@@ -1,45 +1,55 @@
 /**
- * ============================================================================
- * JEV ADAPTER — this is the one file you edit to go live.
- * ============================================================================
+ * Jev via OpenRouter's Decisions API.
  *
- * Everything TypeSafe-specific lives here: the endpoint URLs, the request
- * body shape, and how to read the response. The rest of the app only ever
- * sees the normalised shapes returned at the bottom of each function.
+ * This is not a chat model. Requests go to /api/alpha/decisions and come back
+ * as a typed choice plus a confidence value. They are never sent to
+ * /api/v1/chat/completions.
  *
- * Fill in the TODOs from TypeSafe's docs. Keys are read from the environment
- * (server/.env) and never leave the server.
+ * The key stays in server/.env and never reaches the browser.
  */
 
-const JEV_API_KEY = process.env.JEV_API_KEY;
-const JEV_BASE_URL = process.env.JEV_BASE_URL || 'https://api.typesafe.ai/v1';
+const DECISIONS_URL = 'https://openrouter.ai/api/alpha/decisions';
 
-// TODO: replace with the real model / decision ids from your TypeSafe console.
-const JEV_CLASSIFY_MODEL = process.env.JEV_CLASSIFY_MODEL || 'ticket-router-v1';
-const JEV_GATE_MODEL = process.env.JEV_GATE_MODEL || 'action-gate-v1';
+const LABELS = ['Billing', 'Technical', 'Refund', 'Spam'];
+const GATE_DECISIONS = ['allow', 'ask', 'block'];
 
-export const hasJevKey = () => Boolean(JEV_API_KEY);
+const jevKey = () => process.env.OPENROUTER_API_KEY || process.env.JEV_API_KEY;
+const jevModel = () => process.env.JEV_MODEL || 'typesafe/jev-1.13';
 
-async function callJev(path, body) {
+export const hasJevKey = () => Boolean(jevKey());
+
+async function decide(state, questions) {
   const started = Date.now();
-
-  // TODO: confirm the auth header TypeSafe expects. Common options:
-  //   Authorization: `Bearer ${JEV_API_KEY}`   (assumed below)
-  //   x-api-key: JEV_API_KEY
-  const res = await fetch(`${JEV_BASE_URL}${path}`, {
+  const res = await fetch(DECISIONS_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${JEV_API_KEY}`,
+      Authorization: `Bearer ${jevKey()}`,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      model: jevModel(),
+      state,
+      questions,
+    }),
   });
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
     throw new Error(`Jev API ${res.status}: ${detail.slice(0, 300)}`);
   }
-  return { data: await res.json(), latencyMs: Date.now() - started };
+
+  const data = await res.json();
+  return { data, latencyMs: Date.now() - started };
+}
+
+function readChoice(data, name, allowed) {
+  const answer = data?.answers?.[name];
+  const choice = answer?.choice;
+  if (!allowed.includes(choice)) {
+    throw new Error(`Jev returned an unexpected ${name} choice: ${choice ?? 'none'}`);
+  }
+  const confidence = typeof answer.confidence === 'number' ? answer.confidence : null;
+  return { choice, confidence, cost: data?.usage?.cost };
 }
 
 /**
@@ -48,48 +58,60 @@ async function callJev(path, body) {
  * @returns {Promise<{label: string, confidence: number, latencyMs: number, cost?: number}>}
  */
 export async function jevClassify(message) {
-  // TODO: replace the path and body with TypeSafe's classification request.
-  //   e.g. POST /decisions  { model, input, labels }
-  const { data, latencyMs } = await callJev('/decisions', {
-    model: JEV_CLASSIFY_MODEL,
-    input: message,
-    labels: ['Billing', 'Technical', 'Refund', 'Spam'],
-  });
+  const { data, latencyMs } = await decide(
+    { message },
+    {
+      category: {
+        type: 'choice',
+        instructions: 'Which queue should handle this customer message?',
+        criteria: {
+          Billing: 'Invoices, charges, plans, payment methods, or pricing questions',
+          Technical: 'Bugs, crashes, login failures, or something in the product not working',
+          Refund: 'The customer wants money returned, a charge reversed, or a cancellation refunded',
+          Spam: 'Unsolicited promotion, a scam, or a message that is not a real support request',
+        },
+      },
+    }
+  );
 
-  // TODO: map the real response fields. The app needs a label plus a 0..1
-  // confidence; anything below 0.7 is routed to a human by the frontend.
-  return {
-    label: data.decision ?? data.label,
-    confidence: data.confidence ?? data.probability ?? null,
-    latencyMs,
-    cost: data.cost, // optional; falls back to the constant in the frontend
-  };
+  const { choice, confidence, cost } = readChoice(data, 'category', LABELS);
+  return { label: choice, confidence, latencyMs, cost };
 }
 
 /**
  * Judge whether an agent may perform an action.
  *
- * IMPORTANT: `fetchedContent` is deliberately optional and off by default.
- * Sending content the agent fetched lets that content influence the gate —
- * that is exactly the risk the second tab demonstrates. Keep it out unless
- * you are illustrating the failure mode.
+ * `fetchedContent` is only included when the caller opts in. Sending content
+ * the agent fetched lets that content influence the gate — the risk the
+ * second tab demonstrates.
  *
- * @returns {Promise<{decision: 'allow'|'ask'|'block', confidence: number, reason: string}>}
+ * Jev does not write an explanation. `reason` is a one-line restatement of
+ * the typed verdict so the UI still has a sentence to show.
+ *
+ * @returns {Promise<{decision: 'allow'|'ask'|'block', confidence: number, reason: string, influenced: boolean}>}
  */
 export async function jevGate(action, fetchedContent) {
-  // TODO: replace with TypeSafe's gate/policy request shape.
-  const { data, latencyMs } = await callJev('/gate', {
-    model: JEV_GATE_MODEL,
-    action,
-    ...(fetchedContent ? { context: fetchedContent } : {}),
+  const state = fetchedContent ? { action, fetchedContent } : { action };
+  const { data, latencyMs } = await decide(state, {
+    verdict: {
+      type: 'choice',
+      instructions:
+        'May the agent perform this action? Choose ask when the action is consequential but not clearly forbidden, or when the request is ambiguous.',
+      criteria: {
+        allow: 'Safe, reversible, and clearly within what was asked',
+        ask: 'Consequential or ambiguous — a person should confirm before it runs',
+        block: 'Harmful, irreversible, or clearly outside what was asked',
+      },
+    },
   });
 
-  // TODO: map the real fields, and map whatever verdict vocabulary the API
-  // uses onto 'allow' | 'ask' | 'block'.
+  const { choice, confidence } = readChoice(data, 'verdict', GATE_DECISIONS);
+  const influenced = Boolean(fetchedContent) && choice === 'allow';
   return {
-    decision: data.decision ?? data.verdict,
-    confidence: data.confidence ?? null,
-    reason: data.reason ?? data.explanation ?? '',
+    decision: choice,
+    confidence,
+    reason: `Jev chose ${choice}.`,
+    influenced,
     latencyMs,
   };
 }

@@ -77,7 +77,7 @@ export default function SettingsMenu() {
             initial={{ opacity: 0, y: -6, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
-            className="glass absolute right-0 z-40 mt-2 w-[min(88vw,20rem)] rounded-2xl p-4"
+            className="absolute right-0 z-50 mt-2 w-[min(88vw,20rem)] rounded-2xl border border-white/12 bg-[var(--color-abyss)] p-4 shadow-[0_24px_70px_-16px_rgb(0_0_0/0.95)]"
           >
             <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-400">
               Engine mode
@@ -115,8 +115,8 @@ function ModeOption({ active, title, body, onSelect }) {
       aria-pressed={active}
       className={`w-full rounded-xl border p-3 text-left transition ${
         active
-          ? 'border-[var(--color-jev)]/60 bg-[var(--color-jev)]/10'
-          : 'border-white/10 bg-white/[0.03] hover:border-white/25'
+          ? 'border-[var(--color-jev)]/70 bg-[color-mix(in_srgb,var(--color-jev)_16%,var(--color-hull))]'
+          : 'border-white/10 bg-[var(--color-hull)] hover:border-white/25'
       }`}
     >
       <div className="text-sm font-semibold text-slate-100">{title}</div>

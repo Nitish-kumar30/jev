@@ -34,34 +34,33 @@ carries a `Simulated` badge so nothing on screen is mistaken for a real result.
 | `npm run dev:all` | Both at once. |
 | `npm run build` / `npm run preview` | Production build and preview. |
 
-## Live mode (optional) — where to paste your keys
+## Live mode (optional) — where to paste your key
 
 1. `cp server/.env.example server/.env`
-2. Paste your keys into **`server/.env`**:
+2. Paste one OpenRouter key into **`server/.env`**:
    ```
-   JEV_API_KEY=your-typesafe-key
-   LLM_API_KEY=your-llm-key
+   OPENROUTER_API_KEY=your-openrouter-key
+   JEV_MODEL=typesafe/jev-1.13
+   LLM_MODEL=openai/gpt-4o-mini
    ```
-   Keys stay on the server. They are never bundled into the browser, and the
+   The key stays on the server. It is never bundled into the browser, and the
    frontend only ever talks to your own `/api/*` routes.
 3. `npm run dev:all`
 4. In the app, open the settings menu (top right) and choose **Live mode**.
 
-If the backend is not running, or a key is missing, or a request fails, the app
-shows a toast and drops back to Demo mode rather than breaking.
+If the backend is not running, or the key is missing, or a request fails, the
+app shows a toast and drops back to Demo mode rather than breaking.
 
-### Filling in the TypeSafe request format
+Jev is called on OpenRouter's Decisions API (`POST /api/alpha/decisions`) with
+`typesafe/jev-1.13`. Set `JEV_MODEL=~typesafe/jev-latest` to follow the newest
+Jev release. Those requests are not sent to chat completions. The chatbot side
+uses `POST /api/v1/chat/completions` and whatever model id you put in `LLM_MODEL`.
 
-Everything vendor-specific is isolated in two files, each marked with `TODO`
-comments:
+- **`server/adapters/jev.js`** — Decisions API request and response mapping for
+  `jevClassify()` and `jevGate()`.
+- **`server/adapters/llm.js`** — chat completions for the chatbot side.
 
-- **`server/adapters/jev.js`** — endpoint paths, auth header, request body and
-  response mapping for `jevClassify()` and `jevGate()`.
-- **`server/adapters/llm.js`** — the chatbot side (defaults to the Anthropic
-  Messages API; swap it for any provider).
-
-Nothing else in the app needs to change: both adapters return a normalised
-shape, documented in their JSDoc.
+Both adapters return a normalised shape, documented in their JSDoc.
 
 Backend endpoints:
 
@@ -104,8 +103,8 @@ src/
     gate/  GateTab.jsx, TrafficLight.jsx, ConfidenceGauge.jsx, AuditLog.jsx
 server/
   index.js                     Express app, the three routes + /api/health
-  adapters/jev.js              TODO: TypeSafe request format
-  adapters/llm.js              TODO: chatbot provider request format
+  adapters/jev.js              OpenRouter Decisions API (Jev)
+  adapters/llm.js              OpenRouter chat completions (chatbot)
   .env.example                 Copy to server/.env and paste keys here
 ```
 

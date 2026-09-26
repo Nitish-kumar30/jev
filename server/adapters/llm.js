@@ -1,23 +1,32 @@
 /**
- * ============================================================================
- * LLM ADAPTER — the chatbot side of the comparison.
- * ============================================================================
+ * Chatbot side of the comparison, via OpenRouter chat completions.
  *
- * Defaults to the Anthropic Messages API. Swap the URL, headers and body for
- * any other provider; only this file needs to change.
+ * This is a normal text model. Jev does not use this endpoint.
  */
 
-const LLM_API_KEY = process.env.LLM_API_KEY;
-const LLM_BASE_URL = process.env.LLM_BASE_URL || 'https://api.anthropic.com/v1/messages';
-const LLM_MODEL = process.env.LLM_MODEL || 'claude-haiku-4-5-20251001';
+const CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-export const hasLlmKey = () => Boolean(LLM_API_KEY);
+const llmKey = () => process.env.OPENROUTER_API_KEY || process.env.LLM_API_KEY;
+const llmModel = () => process.env.LLM_MODEL || 'openai/gpt-4o-mini';
+
+export const hasLlmKey = () => Boolean(llmKey());
 
 const PROMPT = `Classify the support message into exactly one of:
 Billing, Technical, Refund, Spam.
 Reply with the single word only, no punctuation or explanation.
 
 Message: `;
+
+function readText(content) {
+  if (typeof content === 'string') return content.trim();
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => (typeof part?.text === 'string' ? part.text : ''))
+      .join('')
+      .trim();
+  }
+  return '';
+}
 
 /**
  * Classify one support message with a text-generating model.
@@ -27,16 +36,14 @@ Message: `;
 export async function llmClassify(message) {
   const started = Date.now();
 
-  // TODO: adjust if you point this at a provider other than Anthropic.
-  const res = await fetch(LLM_BASE_URL, {
+  const res = await fetch(CHAT_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': LLM_API_KEY,
-      'anthropic-version': '2023-06-01',
+      Authorization: `Bearer ${llmKey()}`,
     },
     body: JSON.stringify({
-      model: LLM_MODEL,
+      model: llmModel(),
       max_tokens: 8,
       messages: [{ role: 'user', content: PROMPT + message }],
     }),
@@ -48,16 +55,13 @@ export async function llmClassify(message) {
   }
 
   const data = await res.json();
-  const raw = (data.content?.[0]?.text ?? '').trim();
+  const raw = readText(data.choices?.[0]?.message?.content);
   const label = ['Billing', 'Technical', 'Refund', 'Spam'].find(
-    (l) => l.toLowerCase() === raw.toLowerCase()
+    (name) => name.toLowerCase() === raw.toLowerCase()
   );
 
   return {
-    // A text model can reply with anything; fall back rather than crash.
     label: label ?? 'Technical',
-    // Deliberately null: this is the point of the comparison. A chatbot's
-    // prose does not carry a calibrated probability.
     confidence: null,
     latencyMs: Date.now() - started,
   };
