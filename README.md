@@ -44,9 +44,16 @@ carries a `Simulated` badge so nothing on screen is mistaken for a real result.
    LLM_MODEL=openai/gpt-4o-mini
    ```
    The key stays on the server. It is never bundled into the browser, and the
-   frontend only ever talks to your own `/api/*` routes.
+   frontend only ever talks to your own `/api/*` routes. `server/.env` is
+   git-ignored, so it is not uploaded with the repo.
 3. `npm run dev:all`
 4. In the app, open the settings menu (top right) and choose **Live mode**.
+
+On Vercel, the same routes run as one serverless function in this project. You
+do not deploy a second backend. In the Vercel project settings, add
+`OPENROUTER_API_KEY` (and optionally `JEV_MODEL` and `LLM_MODEL`), then
+redeploy. The project root must be the folder that contains `package.json`
+and `api/`. After deploy, `https://<your-app>/api/health` should return JSON.
 
 If the backend is not running, or the key is missing, or a request fails, the
 app shows a toast and drops back to Demo mode rather than breaking.
@@ -75,7 +82,8 @@ Backend endpoints:
 
 ```
 index.html                     Fonts, favicon, mount point
-vite.config.js                 Vite + Tailwind, /api proxy to the backend
+vite.config.js                 Vite + Tailwind, /api proxy for local dev
+vercel.json                    Sends /api/* to the serverless function
 src/
   main.jsx                     Entry point, mode provider
   App.jsx                      Header, tabs, hero, toasts
@@ -101,8 +109,11 @@ src/
     race/  useRace.js, RaceTab.jsx, RacePanel.jsx, Bins.jsx,
            ResultsCard.jsx, DetailDrawer.jsx
     gate/  GateTab.jsx, TrafficLight.jsx, ConfidenceGauge.jsx, AuditLog.jsx
+api/
+  index.js                     Vercel entry; exports the Express app
 server/
-  index.js                     Express app, the three routes + /api/health
+  app.js                       Express routes: health, classify, gate
+  index.js                     Local listener only (loads server/.env)
   adapters/jev.js              OpenRouter Decisions API (Jev)
   adapters/llm.js              OpenRouter chat completions (chatbot)
   .env.example                 Copy to server/.env and paste keys here
