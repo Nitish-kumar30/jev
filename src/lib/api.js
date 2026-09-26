@@ -31,6 +31,7 @@ async function request(path, body) {
 export const classifyWithJev = (message) => request('/api/jev/classify', { message });
 export const classifyWithLlm = (message) => request('/api/llm/classify', { message });
 export const gateWithJev = (payload) => request('/api/jev/gate', payload);
+export const runExample = (n) => request(`/api/examples/${n}`, {});
 
 /**
  * Used before switching to Live mode: confirms the backend is up and that it

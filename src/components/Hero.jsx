@@ -24,7 +24,7 @@ const COMPARISON = [
   },
 ];
 
-export default function Hero() {
+export default function Hero({ light = false }) {
   return (
     <section className="mx-auto w-full max-w-6xl px-5 pt-10 sm:pt-14">
       <motion.div
@@ -33,33 +33,62 @@ export default function Hero() {
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
         className="text-center"
       >
-        <Pill className="mx-auto">System One decision model · TypeSafe AI</Pill>
+        <Pill
+          className={
+            light
+              ? 'border-[#E4E0D6] bg-[#FDFCFA] text-[#243044]'
+              : ''
+          }
+        >
+          System One decision model · TypeSafe AI
+        </Pill>
         <h1 className="mt-5 text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
-          <span className="text-glow-bot text-[var(--color-bot)]">Chatbots write.</span>{' '}
-          <span className="text-glow-jev text-[var(--color-jev)]">Jev decides.</span>
+          <span className={light ? 'text-[#D97706]' : 'text-glow-bot text-[var(--color-bot)]'}>
+            Chatbots write.
+          </span>{' '}
+          <span className={light ? 'text-[#00897B]' : 'text-glow-jev text-[var(--color-jev)]'}>
+            Jev decides.
+          </span>
         </h1>
-        <p className="mx-auto mt-5 max-w-2xl text-balance text-base leading-relaxed text-slate-300 sm:text-lg">
+        <p
+          className={`mx-auto mt-5 max-w-2xl text-balance text-base leading-relaxed sm:text-lg ${
+            light ? 'text-[#243044]' : 'text-slate-300'
+          }`}
+        >
           A chatbot produces sentences for a human to read. Jev returns a decision your
           software can act on — a choice, a score, a yes or no, with a confidence value
           attached. Below you can watch both do the same job, side by side.
         </p>
       </motion.div>
 
-      <GlassCard className="mt-10 overflow-hidden">
-        <div className="grid grid-cols-[minmax(4.5rem,0.6fr)_1fr_1fr] gap-px bg-white/8 text-sm">
-          <div className="bg-[var(--color-abyss)] px-4 py-3" />
-          <div className="bg-[var(--color-abyss)] px-4 py-3 font-semibold text-[var(--color-bot)]">
-            Chatbot AI (LLM)
+      {light ? (
+        <div className="mt-10 overflow-hidden rounded-xl border border-[#E4E0D6] bg-[#FDFCFA]">
+          <div className="grid grid-cols-[minmax(4.5rem,0.6fr)_1fr_1fr] gap-px bg-[#E4E0D6] text-sm">
+            <div className="bg-[#FDFCFA] px-4 py-3" />
+            <div className="bg-[#FDFCFA] px-4 py-3 font-semibold text-[#D97706]">Chatbot AI (LLM)</div>
+            <div className="bg-[#FDFCFA] px-4 py-3 font-semibold text-[#00897B]">Jev (decision model)</div>
+            {COMPARISON.map((row) => (
+              <Row key={row.label} light {...row} />
+            ))}
           </div>
-          <div className="bg-[var(--color-abyss)] px-4 py-3 font-semibold text-[var(--color-jev)]">
-            Jev (decision model)
-          </div>
-          {COMPARISON.map((row) => (
-            <Row key={row.label} {...row} />
-          ))}
         </div>
-      </GlassCard>
-      <p className="mt-3 text-center text-[11px] text-slate-500">
+      ) : (
+        <GlassCard className="mt-10 overflow-hidden">
+          <div className="grid grid-cols-[minmax(4.5rem,0.6fr)_1fr_1fr] gap-px bg-white/8 text-sm">
+            <div className="bg-[var(--color-abyss)] px-4 py-3" />
+            <div className="bg-[var(--color-abyss)] px-4 py-3 font-semibold text-[var(--color-bot)]">
+              Chatbot AI (LLM)
+            </div>
+            <div className="bg-[var(--color-abyss)] px-4 py-3 font-semibold text-[var(--color-jev)]">
+              Jev (decision model)
+            </div>
+            {COMPARISON.map((row) => (
+              <Row key={row.label} {...row} />
+            ))}
+          </div>
+        </GlassCard>
+      )}
+      <p className={`mt-3 text-center text-[11px] ${light ? 'text-[#3E4A5C]' : 'text-slate-500'}`}>
         Speed and cost figures are vendor-reported by TypeSafe AI and unverified here.
         Everything on this page runs on simulated numbers unless Live mode is on.
       </p>
@@ -67,7 +96,18 @@ export default function Hero() {
   );
 }
 
-function Row({ label, bot, jev }) {
+function Row({ label, bot, jev, light = false }) {
+  if (light) {
+    return (
+      <>
+        <div className="bg-[#FDFCFA] px-4 py-3 font-mono text-[11px] uppercase tracking-[0.14em] text-[#3E4A5C]">
+          {label}
+        </div>
+        <div className="bg-[#FDFCFA] px-4 py-3 text-[#243044]">{bot}</div>
+        <div className="bg-[#FDFCFA] px-4 py-3 text-[#141B2E]">{jev}</div>
+      </>
+    );
+  }
   return (
     <>
       <div className="bg-[var(--color-hull)]/70 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.14em] text-slate-400">

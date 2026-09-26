@@ -4,7 +4,7 @@ import { MODES, useMode } from '../lib/ModeContext';
 import { checkBackendHealth } from '../lib/api';
 
 /** Top-right settings popover: the Demo / Live switch lives here. */
-export default function SettingsMenu() {
+export default function SettingsMenu({ light = false }) {
   const { mode, setMode, pushToast } = useMode();
   const [open, setOpen] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -51,7 +51,11 @@ export default function SettingsMenu() {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="glass flex items-center gap-2 rounded-full px-3 py-2 text-xs text-slate-200 transition hover:border-white/25"
+        className={`flex items-center gap-2 rounded-full px-3 py-2 text-xs transition ${
+          light
+            ? 'border border-[#E4E0D6] bg-[#FDFCFA] text-[#141B2E] hover:border-[#00897B]'
+            : 'glass text-slate-200 hover:border-white/25'
+        }`}
       >
         <span
           className={`h-2 w-2 rounded-full ${
@@ -63,7 +67,7 @@ export default function SettingsMenu() {
         <span className="font-mono uppercase tracking-[0.16em]">
           {mode === MODES.LIVE ? 'Live' : 'Demo'}
         </span>
-        <span aria-hidden="true" className="text-slate-400">
+        <span aria-hidden="true" className={light ? 'text-[#3E4A5C]' : 'text-slate-400'}>
           ⚙
         </span>
         <span className="sr-only">Open settings</span>

@@ -1,16 +1,17 @@
 # Jev vs Chatbot AI: See the Difference
 
-A single-page, two-tab demo that shows non-technical people how a **decision
+A single-page demo that shows non-technical people how a **decision
 model** (Jev by TypeSafe AI) differs from a **normal LLM chatbot**.
 
 A chatbot writes sentences for a person to read. Jev returns a typed decision —
 a label, a score, a yes or no — with a probability attached, meant for software
-to act on. The two tabs make that difference visible:
+to act on. The tabs make that difference visible:
 
 | Tab | What it shows |
 | --- | --- |
 | **Ticket Sorting Race** | Both engines sort the same 50 customer messages into Billing / Technical / Refund / Spam, side by side, with live timers, cost and accuracy. Jev shows a confidence bar and hands anything below 70% to a human instead of guessing. |
 | **Agent Safety Gate** | Before an AI agent acts, Jev answers allow / ask a human / block, with a confidence value and a plain-English reason. Includes a prompt-injection demo and an honest note about its limits. |
+| **Examples** | Six tasks run both ways: chat completions versus Jev on systemone. Each one shows the typed result beside the Python that defines it. Example 6 is the case where Jev is the wrong tool. This tab only runs in Live mode. |
 
 ## Run it
 
@@ -22,8 +23,10 @@ npm run dev
 ```
 
 Open <http://localhost:5173>. That's it — **Demo mode needs no backend, no API
-keys and no network.** Every engine is simulated in the browser, and each panel
-carries a `Simulated` badge so nothing on screen is mistaken for a real result.
+keys and no network.** The race and the gate are simulated in the browser, and
+each of those panels carries a `Simulated` badge so nothing on screen is
+mistaken for a real result. The Examples tab shows the scenario and the Python
+immediately; Run calls the real APIs and only works in Live mode.
 
 ## Scripts
 
@@ -58,16 +61,25 @@ and `api/`. After deploy, `https://<your-app>/api/health` should return JSON.
 If the backend is not running, or the key is missing, or a request fails, the
 app shows a toast and drops back to Demo mode rather than breaking.
 
-Jev is called on OpenRouter's Decisions API (`POST /api/alpha/decisions`) with
-`typesafe/jev-1.13`. Set `JEV_MODEL=~typesafe/jev-latest` to follow the newest
-Jev release. Those requests are not sent to chat completions. The chatbot side
-uses `POST /api/v1/chat/completions` and whatever model id you put in `LLM_MODEL`.
+The race and the gate call Jev on OpenRouter's Decisions API
+(`POST /api/alpha/decisions`) with `typesafe/jev-1.13`. Set
+`JEV_MODEL=~typesafe/jev-latest` to follow the newest Jev release. Those
+requests are not sent to chat completions. The chatbot side uses
+`POST /api/v1/chat/completions` and whatever model id you put in `LLM_MODEL`.
+
+The Examples tab is a different Jev endpoint, matching the six-task script:
+`POST /api/v1/systemone` with model `jev-1.13` (OpenRouter maps that to
+`typesafe/jev-1.13`). It does not read `JEV_MODEL`. It uses the same
+`OPENROUTER_API_KEY` and the same Express app, so it deploys with the existing
+Vercel function. There is no Python service.
 
 - **`server/adapters/jev.js`** — Decisions API request and response mapping for
   `jevClassify()` and `jevGate()`.
 - **`server/adapters/llm.js`** — chat completions for the chatbot side.
+- **`server/examples.js`** — the six examples. Chat completions for the prose
+  side, `POST /api/v1/systemone` for Jev. Still the same serverless function.
 
-Both adapters return a normalised shape, documented in their JSDoc.
+The classify and gate adapters return a normalised shape, documented in their JSDoc.
 
 Backend endpoints:
 
@@ -76,6 +88,7 @@ Backend endpoints:
 | `POST /api/jev/classify` | `{ message }` | `{ label, confidence, latencyMs }` |
 | `POST /api/llm/classify` | `{ message }` | `{ label, confidence: null, latencyMs }` |
 | `POST /api/jev/gate` | `{ action, fetchedContent? }` | `{ decision, confidence, reason }` |
+| `POST /api/examples/:n` | — (`n` is 1–6) | `{ n, models, rounds }` — each round has `llm` and `jev` rows, latency, and cost |
 | `GET /api/health` | — | `{ ok, jevKey, llmKey }` |
 
 ## Project structure
@@ -109,10 +122,12 @@ src/
     race/  useRace.js, RaceTab.jsx, RacePanel.jsx, Bins.jsx,
            ResultsCard.jsx, DetailDrawer.jsx
     gate/  GateTab.jsx, TrafficLight.jsx, ConfidenceGauge.jsx, AuditLog.jsx
+    examples/  ExamplesTab.jsx, CodePanel.jsx, snippets.js, highlight.js
 api/
   index.js                     Vercel entry; exports the Express app
 server/
-  app.js                       Express routes: health, classify, gate
+  app.js                       Express routes: health, classify, gate, examples
+  examples.js                  Six Jev-vs-chat runs via systemone + chat completions
   index.js                     Local listener only (loads server/.env)
   adapters/jev.js              OpenRouter Decisions API (Jev)
   adapters/llm.js              OpenRouter chat completions (chatbot)

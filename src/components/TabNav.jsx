@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 
 /** Two-tab switcher with arrow-key support, wired as a real ARIA tablist. */
-export default function TabNav({ tabs, active, onChange }) {
+export default function TabNav({ tabs, active, onChange, light = false }) {
   const onKeyDown = (e) => {
     const i = tabs.findIndex((t) => t.id === active);
     if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
@@ -16,7 +16,9 @@ export default function TabNav({ tabs, active, onChange }) {
       role="tablist"
       aria-label="Demonstrations"
       onKeyDown={onKeyDown}
-      className="glass inline-flex rounded-full p-1"
+      className={`inline-flex max-w-full flex-wrap rounded-full p-1 ${
+        light ? 'border border-[#E4E0D6] bg-[#FDFCFA]' : 'glass'
+      }`}
     >
       {tabs.map((tab) => {
         const selected = tab.id === active;
@@ -34,11 +36,25 @@ export default function TabNav({ tabs, active, onChange }) {
             {selected ? (
               <motion.span
                 layoutId="tab-pill"
-                className="absolute inset-0 rounded-full bg-[var(--color-jev)]/15 ring-1 ring-[var(--color-jev)]/50"
+                className={`absolute inset-0 rounded-full ${
+                  light
+                    ? 'bg-[#D7F2EC] ring-1 ring-[#00897B]/40'
+                    : 'bg-[var(--color-jev)]/15 ring-1 ring-[var(--color-jev)]/50'
+                }`}
                 transition={{ type: 'spring', stiffness: 320, damping: 30 }}
               />
             ) : null}
-            <span className={`relative ${selected ? 'text-[var(--color-jev)]' : 'text-slate-300'}`}>
+            <span
+              className={`relative ${
+                light
+                  ? selected
+                    ? 'text-[#00897B]'
+                    : 'text-[#243044]'
+                  : selected
+                    ? 'text-[var(--color-jev)]'
+                    : 'text-slate-300'
+              }`}
+            >
               {tab.label}
             </span>
           </button>

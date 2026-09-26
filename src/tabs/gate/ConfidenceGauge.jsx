@@ -6,7 +6,7 @@ const R = 62;
 const CIRC = Math.PI * R; // semicircle length
 
 /** Semicircular gauge for the gate's confidence value. */
-export default function ConfidenceGauge({ value, decision }) {
+export default function ConfidenceGauge({ value, decision, light = false }) {
   const pct = value ?? 0;
   const color = decision ? DECISIONS[decision].color : 'var(--color-jev)';
 
@@ -17,7 +17,7 @@ export default function ConfidenceGauge({ value, decision }) {
         <path
           d={`M 18 80 A ${R} ${R} 0 0 1 142 80`}
           fill="none"
-          stroke="rgba(255,255,255,0.1)"
+          stroke={light ? '#E4E0D6' : 'rgba(255,255,255,0.1)'}
           strokeWidth="12"
           strokeLinecap="round"
         />
@@ -31,7 +31,7 @@ export default function ConfidenceGauge({ value, decision }) {
           initial={false}
           animate={{ strokeDashoffset: CIRC * (1 - pct) }}
           transition={{ type: 'spring', stiffness: 90, damping: 20 }}
-          style={{ filter: `drop-shadow(0 0 8px ${color})` }}
+          style={{ filter: light ? 'none' : `drop-shadow(0 0 8px ${color})` }}
         />
         {/* Marker at the 70% confidence threshold (54 degrees up from the right). */}
         <line
@@ -39,7 +39,7 @@ export default function ConfidenceGauge({ value, decision }) {
           y1="37.9"
           x2="116.4"
           y2="29.8"
-          stroke="rgba(255,255,255,0.45)"
+          stroke={light ? '#3E4A5C' : 'rgba(255,255,255,0.45)'}
           strokeWidth="2"
           strokeLinecap="round"
         />
@@ -48,7 +48,7 @@ export default function ConfidenceGauge({ value, decision }) {
         <div className="font-mono text-3xl" style={{ color }}>
           {value === null ? '—' : <Counter value={pct * 100} format={(v) => `${v.toFixed(0)}%`} />}
         </div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">
+        <div className={`font-mono text-[10px] uppercase tracking-[0.16em] ${light ? 'text-[#3E4A5C]' : 'text-slate-400'}`}>
           Confidence
         </div>
       </div>

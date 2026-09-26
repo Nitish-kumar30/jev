@@ -2,15 +2,22 @@ import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { useEffect } from 'react';
 import { usePrefersReducedMotion } from '../lib/useReducedMotion';
 
-export function GlassCard({ className = '', as: Tag = 'div', ...rest }) {
-  return <Tag className={`glass rounded-2xl ${className}`} {...rest} />;
+export function GlassCard({ className = '', plain = false, as: Tag = 'div', ...rest }) {
+  const surface = plain
+    ? 'rounded-2xl border border-[#E4E0D6] bg-[#FDFCFA]'
+    : 'glass rounded-2xl';
+  return <Tag className={`${surface} ${className}`} {...rest} />;
 }
 
 /** Shown on every panel while the engines are simulated rather than real. */
-export function SimulatedBadge({ className = '' }) {
+export function SimulatedBadge({ className = '', light = false }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border border-amber-300/40 bg-amber-300/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-amber-200 ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] ${
+        light
+          ? 'border-[#D97706]/40 bg-[#D97706]/10 text-[#D97706]'
+          : 'border-amber-300/40 bg-amber-300/10 text-amber-200'
+      } ${className}`}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
       Simulated
@@ -46,16 +53,31 @@ export function Counter({ value, format = (v) => Math.round(v).toString(), class
   return <motion.span className={className}>{text}</motion.span>;
 }
 
-export function Stat({ label, children, tone = 'default' }) {
-  const toneClass =
-    tone === 'jev'
+export function Stat({ label, children, tone = 'default', light = false }) {
+  const toneClass = light
+    ? tone === 'jev'
+      ? 'text-[#00897B]'
+      : tone === 'bot'
+        ? 'text-[#D97706]'
+        : 'text-[#141B2E]'
+    : tone === 'jev'
       ? 'text-[var(--color-jev)]'
       : tone === 'bot'
         ? 'text-[var(--color-bot)]'
         : 'text-slate-100';
   return (
-    <div className="rounded-xl border border-white/8 bg-black/25 px-3 py-2">
-      <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-400">
+    <div
+      className={
+        light
+          ? 'rounded-xl border border-[#E4E0D6] bg-[#F7F5F0] px-3 py-2'
+          : 'rounded-xl border border-white/8 bg-black/25 px-3 py-2'
+      }
+    >
+      <div
+        className={`font-mono text-[10px] uppercase tracking-[0.16em] ${
+          light ? 'text-[#3E4A5C]' : 'text-slate-400'
+        }`}
+      >
         {label}
       </div>
       <div className={`mt-1 font-mono text-lg leading-none ${toneClass}`}>{children}</div>

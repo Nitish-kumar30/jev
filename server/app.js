@@ -9,6 +9,7 @@ import express from 'express';
 import cors from 'cors';
 import { hasJevKey, jevClassify, jevGate } from './adapters/jev.js';
 import { hasLlmKey, llmClassify } from './adapters/llm.js';
+import { openRouterKey, runExample } from './examples.js';
 
 const app = express();
 app.use(cors());
@@ -46,6 +47,18 @@ app.post('/api/llm/classify', requireKey(hasLlmKey, 'OPENROUTER_API_KEY'), async
   if (!message) return res.status(400).json({ error: 'message is required' });
   try {
     res.json(await llmClassify(message));
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+app.post('/api/examples/:n', requireKey(() => Boolean(openRouterKey()), 'OPENROUTER_API_KEY'), async (req, res) => {
+  const n = Number(req.params.n);
+  if (!Number.isInteger(n) || n < 1 || n > 6) {
+    return res.status(400).json({ error: 'example must be 1–6' });
+  }
+  try {
+    res.json(await runExample(n));
   } catch (err) {
     res.status(502).json({ error: err.message });
   }

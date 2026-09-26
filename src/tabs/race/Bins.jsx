@@ -5,7 +5,7 @@ import { Counter } from '../../components/ui.jsx';
 const BIN_ORDER = [...LABELS, HUMAN_REVIEW];
 
 /** The four category bins plus Jev's fifth "Human review" bin. */
-export default function Bins({ results, showHumanBin, onSelect }) {
+export default function Bins({ results, showHumanBin, onSelect, light = false }) {
   const bins = BIN_ORDER.filter((b) => b !== HUMAN_REVIEW || showHumanBin);
 
   return (
@@ -19,8 +19,8 @@ export default function Bins({ results, showHumanBin, onSelect }) {
         return (
           <div
             key={bin}
-            className="rounded-xl border border-white/10 bg-black/30 p-2"
-            style={{ boxShadow: items.length ? `inset 0 -2px 18px -8px ${style.color}` : 'none' }}
+            className={`rounded-xl border p-2 ${light ? 'border-[#E4E0D6] bg-[#F7F5F0]' : 'border-white/10 bg-black/30'}`}
+            style={{ boxShadow: !light && items.length ? `inset 0 -2px 18px -8px ${style.color}` : 'none' }}
           >
             <div className="flex items-baseline justify-between gap-1">
               <span
@@ -32,7 +32,7 @@ export default function Bins({ results, showHumanBin, onSelect }) {
               </span>
               <Counter
                 value={items.length}
-                className="font-mono text-sm text-slate-100"
+                className={`font-mono text-sm ${light ? 'text-[#141B2E]' : 'text-slate-100'}`}
                 data-testid={`bin-count-${bin}`}
               />
             </div>
@@ -49,7 +49,7 @@ export default function Bins({ results, showHumanBin, onSelect }) {
                       animate={{ opacity: 1, scale: 1 }}
                       onClick={() => onSelect(r)}
                       title={r.ticket.text}
-                      className="w-full rounded-md border px-1.5 py-1 text-left font-mono text-[10px] text-slate-200 transition hover:brightness-150"
+                      className={`w-full rounded-md border px-1.5 py-1 text-left font-mono text-[10px] transition ${light ? 'text-[#141B2E] hover:bg-[#F7F5F0]' : 'text-slate-200 hover:brightness-150'}`}
                       style={{
                         borderColor: wrong ? 'var(--color-spam)' : `${style.color}55`,
                         background: `${style.color}1a`,
