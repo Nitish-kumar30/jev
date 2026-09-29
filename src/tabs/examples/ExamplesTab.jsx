@@ -321,7 +321,7 @@ export default function ExamplesTab({ light = false }) {
         <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Jev vs a chat LLM</h2>
         <p className={`mx-auto mt-2 max-w-2xl text-sm leading-relaxed ${light ? 'text-[#243044]' : 'text-slate-400'}`}>
           Six tasks, done both ways. Chat goes to completions and comes back as prose. Jev goes to
-          systemone and comes back typed. Example 6 is the one where Jev is the wrong tool.
+          systemone and comes back typed. Example 6 is where Jev routes and the LLM writes.
         </p>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
           <button type="button" onClick={runAll} disabled={runningAll} className={runButtonClass(light)}>

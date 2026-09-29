@@ -81,35 +81,29 @@ answers, ms, cost = ask_jev(EMAIL, {
     n: 3,
     title: "Know when you don't know",
     point:
-      'Ask a chat model how confident it is and it will tell you a number it made up. Watch what each one does when the input goes from clear to genuinely ambiguous.',
+      'Four tickets, from clear to genuinely split between two teams. Both sides use the same 0.85 auto-route bar. Watch whose number actually drops.',
     takeaway:
-      "A self-reported score tends to sit high whatever you feed it — it is a token the model generated, not a measurement. Jev's number is trained to move. That difference is the entire basis for automating anything safely.",
-    inputLabel: 'Two tickets',
-    input:
-      'Clear: "I was double-charged for invoice INV-2291 on the 14th. Please refund the duplicate."\n\nAmbiguous: "hi it\'s not working again, please help, I already paid you"',
-    code: `prompt = (
-    "Classify into billing, technical, or sales, and rate how confident you are.\\n"
-    'Reply with ONLY {"department":"...","confidence":0.0-1.0}\\n\\n'
-    f"Ticket: {ticket}"
-)
-text, ms, cost = ask_llm(prompt)
-p = parse_json_from(text) or {}
-# p["confidence"] is a token the model wrote
+      "Same bar (0.85) on both. The LLM's number is a token it wrote, so it clears the bar on everything. Jev's probability drops on the split tickets, so those go to a human instead of the wrong team.",
+    inputLabel: 'Confidence ladder',
+    input: `Clear: double-charged on INV-2291.
+Mostly clear: Stripe webhook returns 500.
+Split, billing vs technical: paid for Pro, still on Free.
+Split, billing vs sales: charged $480, asking if annual is cheaper.`,
+    code: `AUTO_ROUTE_BAR = 0.85
 
-answers, ms, cost = ask_jev(ticket, {
-    "department": {
-        "type": "choice",
-        "instructions": "Which team should handle this ticket?",
-        "criteria": {
-            "billing": "Payment, invoice or subscription problems",
-            "technical": "Bugs, errors, or integration failures",
-            "sales": "Pricing, plans, or new account questions",
-        },
-    }
-})
-d = answers["department"]
-# if d["confidence"] >= 0.85: route_it()
-# else:                       human_review()`,
+for label, ticket in CONFIDENCE_LADDER:
+    text, ms, cost = ask_llm(
+        "Classify into billing, technical, or sales, and rate how confident you are.\\n"
+        'Reply with ONLY {"department":"...","confidence":0.0-1.0}\\n\\n'
+        f"Ticket: {ticket}"
+    )
+    p = parse_json_from(text) or {}
+    llm_would_route = (p.get("confidence") or 0) >= AUTO_ROUTE_BAR
+
+    answers, ms, cost = ask_jev(ticket, DEPARTMENT_Q)
+    probs = answers["department"].get("probabilities") or {}
+    jev_top = max(probs.values()) if probs else answers["department"].get("confidence")
+    jev_would_route = (jev_top or 0) >= AUTO_ROUTE_BAR`,
   },
   {
     n: 4,
@@ -150,66 +144,46 @@ for text_item in FEEDBACK:
     n: 5,
     title: 'Guard an irreversible action',
     point:
-      'Before an agent spends real money, something has to say yes or no. That gate needs to be a number, not a sentence.',
+      'Two refunds: a documented $45 and an undocumented $4,200. The bar comes from the amount, so each action gets one verdict.',
     takeaway:
-      'A boolean is a decision someone else made for you. A probability is an input to a decision you make, and you can set a different bar for a $50 refund than for a $50,000 one without touching the model.',
-    inputLabel: 'Proposed action',
-    input:
-      "Agent proposes to execute: issue_refund(customer_id=88213, amount_usd=4200.00, reason='customer says they were overcharged'). Account history: 2 prior refunds this quarter totalling $310. No invoice or charge ID was provided in the request.",
-    code: `prompt = ("Should this automated action be allowed to run without human approval? "
-          'Reply with ONLY {"allow":true/false,"reason":"..."}\\n\\n' + PROPOSED_ACTION)
-text, ms, cost = ask_llm(prompt)
-p = parse_json_from(text) or {}
-p.get("allow")                 # a bare true/false. no dial.
+      'The model gives a probability; the business decides the bar. Tighten the bar for big amounts by editing the refund tiers, not the prompt.',
+    inputLabel: 'Two proposed refunds',
+    input: `$45 — duplicate charge, invoice INV-7710, charge id on file, no prior refunds.
+$4,200 — customer says they were overcharged. Two prior refunds this quarter. No invoice or charge id.`,
+    code: `REFUND_TIERS = [(100, 0.70), (1_000, 0.90), (10_000, 0.99)]
 
-answers, ms, cost = ask_jev(PROPOSED_ACTION, {
-    "safe_to_auto_run": {
-        "type": "noul",
-        "instructions": "Is it safe to run this action automatically, with no human check?",
-    }
-})
-p_safe = answers["safe_to_auto_run"].get("noul")
-for limit, bar in ((100, 0.70), (1000, 0.90), (10000, 0.99)):
-    verdict = "auto-run" if (p_safe or 0) >= bar else "needs a human"`,
+def bar_for(amount):
+    for limit, bar in REFUND_TIERS:
+        if amount < limit:
+            return bar
+    return None  # above every tier: never auto-run
+
+p_safe = answers["safe_to_auto_run"].get("noul") or 0
+bar = bar_for(amount)
+auto = bar is not None and p_safe >= bar
+# "$4,200 needs P >= 0.99, got 0.04 -> needs a human"`,
   },
   {
     n: 6,
-    title: 'Write a customer reply',
-    wrongTool: true,
+    title: 'Jev decides, the LLM writes',
     point:
-      'If the last five examples made Jev look strictly better, this one is the correction. Jev gives up string generation.',
+      'A calm customer and an angry one. Jev picks the route. The LLM only drafts. The escalated path never auto-sends a promise nobody will keep.',
     takeaway:
-      'Jev is the routing and gating layer. The LLM is the writing layer. The interesting systems use both, and the boring failure mode is picking one and forcing it to do the other job.',
-    inputLabel: 'Customer',
-    input:
-      "This is the third time I've written. Our SSO has been down for two weeks, we're paying $4k a month, and nobody has replied. I want someone to call me today.",
-    code: `# WITH A CHAT LLM — it writes
-text, ms, cost = ask_llm(
-    "Write a short, warm, non-defensive reply to this customer. Three sentences max.\\n\\n"
-    f"Customer wrote: {ANGRY}"
-)
+      'Jev is the routing layer, the LLM is the writing layer. The angry customer gets a human; the calm one gets an instant answer.',
+    inputLabel: 'Two customers',
+    input: `Calm: where do I change my invoice email? No rush.
+Angry: SSO down for two weeks, $4k a month, third email, wants a call today.`,
+    code: `ANGER_ESCALATE = 1.3   # 0-2 scale
+CALL_ESCALATE = 0.5
 
-# WITH JEV — it cannot. There is no question type that returns prose.
-# Jev answers choice / score / noul.
+anger = answers["anger"].get("score") or 0
+p_call = answers["needs_human_call"].get("noul") or 0
+escalate = anger >= ANGER_ESCALATE or p_call >= CALL_ESCALATE
 
-# THE PATTERN YOU ACTUALLY SHIP — Jev decides, the LLM writes
-answers, ms_j, cost_j = ask_jev(ANGRY, {
-    "needs_human_call": {
-        "type": "noul",
-        "instructions": "Is this customer asking for a phone call from a person?",
-    },
-    "anger": {
-        "type": "score",
-        "instructions": "How angry is this customer?",
-        "criteria": ["Calm", "Frustrated but civil", "Very angry"],
-    },
-})
-anger = answers["anger"].get("score")
-if anger is not None and anger >= 2:
-    # page a human; the LLM only drafts a suggestion
-    pass
+if escalate:
+    # draft for an agent to edit; do not promise a call time
+    sender = "Human agent edits the draft, then sends"
 else:
-    # calm enough to auto-reply; the LLM drafts it
-    pass`,
+    sender = "Sent automatically"`,
   },
 ];

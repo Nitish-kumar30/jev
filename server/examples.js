@@ -27,9 +27,23 @@ Hi team — our contract is up next month and honestly I'm not sure we'll renew.
 
 — Dana, VP Eng`;
 
-const CLEAR =
-  'I was double-charged for invoice INV-2291 on the 14th. Please refund the duplicate.';
-const VAGUE = "hi it's not working again, please help, I already paid you";
+const AUTO_ROUTE_BAR = 0.85;
+
+const CONFIDENCE_LADDER = [
+  [
+    'Clear',
+    'I was double-charged for invoice INV-2291 on the 14th. Please refund the duplicate.',
+  ],
+  ['Mostly clear', 'The Stripe webhook returns a 500 error every time a payment succeeds.'],
+  [
+    'Split: billing vs technical',
+    'I paid for the Pro plan yesterday but my account still shows the Free features. Was the payment not processed, or is something broken?',
+  ],
+  [
+    'Split: billing vs sales',
+    "We're on monthly billing and got charged $480 again. Would switching to annual be cheaper, and can the last charge count toward it?",
+  ],
+];
 
 const FEEDBACK = [
   'Love the new dashboard, so much faster than before.',
@@ -39,11 +53,49 @@ const FEEDBACK = [
   'The docs could use more examples for the webhooks API.',
 ];
 
-const PROPOSED_ACTION =
-  "Agent proposes to execute: issue_refund(customer_id=88213, amount_usd=4200.00, reason='customer says they were overcharged'). Account history: 2 prior refunds this quarter totalling $310. No invoice or charge ID was provided in the request.";
+const REFUND_TIERS = [
+  [100, 0.7],
+  [1000, 0.9],
+  [10000, 0.99],
+];
 
-const ANGRY =
-  "This is the third time I've written. Our SSO has been down for two weeks, we're paying $4k a month, and nobody has replied. I want someone to call me today.";
+const PROPOSED_ACTIONS = [
+  {
+    amount: 45,
+    text:
+      "Agent proposes to execute: issue_refund(customer_id=51902, amount_usd=45.00, charge_id='ch_3Pq81', reason='duplicate charge, same invoice INV-7710 billed twice on the 3rd'). Account history: no prior refunds. Both charges are visible on the account.",
+  },
+  {
+    amount: 4200,
+    text:
+      "Agent proposes to execute: issue_refund(customer_id=88213, amount_usd=4200.00, reason='customer says they were overcharged'). Account history: 2 prior refunds this quarter totalling $310. No invoice or charge ID was provided in the request.",
+  },
+];
+
+const CUSTOMERS = [
+  [
+    'Calm',
+    'Hi, quick one: where do I find the setting to change my invoice email address? No rush. Thanks!',
+  ],
+  [
+    'Angry',
+    "This is the third time I've written. Our SSO has been down for two weeks, we're paying $4k a month, and nobody has replied. I want someone to call me today.",
+  ],
+];
+
+const ANGER_ESCALATE = 1.3;
+const CALL_ESCALATE = 0.5;
+
+function barFor(amount) {
+  for (const [limit, bar] of REFUND_TIERS) {
+    if (amount < limit) return bar;
+  }
+  return null;
+}
+
+function moneyAmount(amount) {
+  return `$${Math.round(amount).toLocaleString('en-US')}`;
+}
 
 const DEPARTMENT = {
   type: 'choice',
@@ -247,7 +299,16 @@ async function example2() {
   };
 }
 
-async function classifyPair(ticket) {
+function asNumber(value) {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function wouldRoute(value) {
+  return (value || 0) >= AUTO_ROUTE_BAR ? 'yes' : 'no — human review';
+}
+
+async function ladderStep(label, ticket) {
   const prompt =
     'Classify into billing, technical, or sales, and rate how confident you are.\n' +
     'Reply with ONLY {"department":"...","confidence":0.0-1.0}\n\n' +
@@ -258,38 +319,38 @@ async function classifyPair(ticket) {
     askJev(ticket, { department: DEPARTMENT }),
   ]);
   const parsed = parseJsonFrom(llm.text) ?? {};
+  const llmConf = asNumber(parsed.confidence);
   const d = jev.answers.department ?? {};
+  const probs = d.probabilities && typeof d.probabilities === 'object' ? d.probabilities : {};
+  const probValues = Object.values(probs).map(asNumber).filter((n) => n != null);
+  const jevTop = probValues.length ? Math.max(...probValues) : asNumber(d.confidence);
+
   return {
+    caption: label,
     input: ticket,
     llm: {
       ...side(llm),
       rows: [
-        {
-          label: 'says',
-          value: `${show(parsed.department)} at confidence ${show(parsed.confidence)}`,
-        },
+        { label: 'department', value: parsed.department ?? 'PARSE FAILED', emphasis: parsed.department ? null : 'fail' },
+        { label: 'confidence', value: show(llmConf ?? parsed.confidence) },
+        { label: 'auto-route ≥ 0.85', value: wouldRoute(llmConf) },
       ],
     },
     jev: {
       ...side(jev),
       rows: [
-        { label: 'says', value: `${show(d.choice)} at confidence ${show(d.confidence)}` },
-        { label: 'spread', value: show(d.probabilities) },
+        { label: 'department', value: show(d.choice) },
+        { label: 'top probability', value: show(jevTop) },
+        { label: 'spread', value: show(probs) },
+        { label: 'auto-route ≥ 0.85', value: wouldRoute(jevTop) },
       ],
     },
   };
 }
 
 async function example3() {
-  const [clear, vague] = await Promise.all([classifyPair(CLEAR), classifyPair(VAGUE)]);
-  return {
-    n: 3,
-    models: models(),
-    rounds: [
-      { caption: 'Clear-cut input', ...clear },
-      { caption: 'Ambiguous input', ...vague },
-    ],
-  };
+  const rounds = await Promise.all(CONFIDENCE_LADDER.map(([label, ticket]) => ladderStep(label, ticket)));
+  return { n: 3, models: models(), rounds };
 }
 
 async function example4() {
@@ -368,121 +429,112 @@ async function example4() {
   };
 }
 
-async function example5() {
+const SAFE_Q = {
+  safe_to_auto_run: {
+    type: 'noul',
+    instructions: 'Is it safe to run this action automatically, with no human check?',
+  },
+};
+
+async function refundStep(action) {
   const prompt =
     'Should this automated action be allowed to run without human approval? ' +
     'Reply with ONLY {"allow":true/false,"reason":"..."}\n\n' +
-    PROPOSED_ACTION;
+    action.text;
 
-  const [llm, jev] = await Promise.all([
-    askLlm(prompt),
-    askJev(PROPOSED_ACTION, {
-      safe_to_auto_run: {
-        type: 'noul',
-        instructions: 'Is it safe to run this action automatically, with no human check?',
-      },
-    }),
-  ]);
-
+  const [llm, jev] = await Promise.all([askLlm(prompt), askJev(action.text, SAFE_Q)]);
   const parsed = parseJsonFrom(llm.text) ?? {};
-  const pSafe = jev.answers.safe_to_auto_run?.noul ?? 0;
-  const bars = [
-    [100, 0.7],
-    [1000, 0.9],
-    [10000, 0.99],
-  ];
+  const pSafe = asNumber(jev.answers.safe_to_auto_run?.noul) ?? 0;
+  const bar = barFor(action.amount);
+  const auto = bar != null && pSafe >= bar;
+  const verdict = auto ? 'auto-run' : 'needs a human';
+  const summary =
+    bar == null
+      ? `${moneyAmount(action.amount)} is above every tier -> needs a human`
+      : `${moneyAmount(action.amount)} needs P >= ${bar}, got ${pSafe.toFixed(2)} -> ${verdict}`;
 
   return {
-    n: 5,
-    models: models(),
-    rounds: [
-      {
-        input: PROPOSED_ACTION,
-        llm: {
-          ...side(llm),
-          rows: [
-            { label: 'allow', value: show(parsed.allow) },
-            { label: 'reason', value: String(parsed.reason ?? 'none').slice(0, 70) },
-          ],
-          note: 'A bare true/false. No dial. You cannot make this stricter for big amounts.',
-        },
-        jev: {
-          ...side(jev),
-          rows: [
-            { label: 'P(safe)', value: show(jev.answers.safe_to_auto_run?.noul) },
-            ...bars.map(([limit, bar]) => ({
-              label: `under $${limit}`,
-              value: `P >= ${bar}  →  ${(pSafe || 0) >= bar ? 'auto-run' : 'needs a human'}`,
-            })),
-          ],
-        },
-      },
-    ],
+    caption: moneyAmount(action.amount),
+    input: action.text,
+    llm: {
+      ...side(llm),
+      rows: [
+        { label: 'allow', value: show(parsed.allow) },
+        { label: 'reason', value: String(parsed.reason ?? 'none').slice(0, 120) },
+      ],
+      note: 'A bare true/false. No dial that scales with the amount.',
+    },
+    jev: {
+      ...side(jev),
+      rows: [
+        { label: 'P(safe)', value: pSafe.toFixed(2) },
+        { label: 'bar', value: bar == null ? 'never auto-run' : String(bar) },
+        { label: 'verdict', value: summary },
+      ],
+    },
+  };
+}
+
+async function example5() {
+  const rounds = await Promise.all(PROPOSED_ACTIONS.map(refundStep));
+  return { n: 5, models: models(), rounds };
+}
+
+const TRIAGE_Q = {
+  needs_human_call: {
+    type: 'noul',
+    instructions: 'Is this customer asking for a phone call from a person?',
+  },
+  anger: {
+    type: 'score',
+    instructions: 'How angry is this customer?',
+    criteria: ['Calm', 'Frustrated but civil', 'Very angry'],
+  },
+};
+
+async function customerStep(label, message) {
+  const jev = await askJev(message, TRIAGE_Q);
+  const anger = asNumber(jev.answers.anger?.score) ?? 0;
+  const pCall = asNumber(jev.answers.needs_human_call?.noul) ?? 0;
+  const escalate = anger >= ANGER_ESCALATE || pCall >= CALL_ESCALATE;
+
+  const reasons = [];
+  if (anger >= ANGER_ESCALATE) reasons.push(`anger ${anger.toFixed(2)} >= ${ANGER_ESCALATE}`);
+  if (pCall >= CALL_ESCALATE) reasons.push(`wants a call (${pCall.toFixed(2)})`);
+
+  const prompt = escalate
+    ? 'Draft a short, warm, non-defensive reply for a support agent to review and edit before sending. Do NOT promise a call time or any specific action; leave [AGENT: ...] placeholders for those. Three sentences max.\n\n' +
+      `Customer wrote: ${message}`
+    : 'Write a short, warm, helpful reply to this customer. Three sentences max.\n\n' +
+      `Customer wrote: ${message}`;
+  const route = escalate
+    ? `Escalated to a human: ${reasons.join(', ')}`
+    : `Auto-reply: anger ${anger.toFixed(2)}, wants a call ${pCall.toFixed(2)}`;
+  const sender = escalate ? 'Human agent edits the draft, then sends' : 'Sent automatically';
+
+  const llm = await askLlm(prompt);
+  return {
+    caption: label,
+    input: message,
+    llm: {
+      ...side(llm),
+      prose: llm.text.trim(),
+      rows: [{ label: 'who sends', value: sender }],
+    },
+    jev: {
+      ...side(jev),
+      rows: [
+        { label: 'anger', value: anger.toFixed(2) },
+        { label: 'P(wants a call)', value: pCall.toFixed(2) },
+        { label: 'route', value: route },
+      ],
+    },
   };
 }
 
 async function example6() {
-  const [llm, jev] = await Promise.all([
-    askLlm(
-      'Write a short, warm, non-defensive reply to this customer. Three sentences max.\n\n' +
-        `Customer wrote: ${ANGRY}`
-    ),
-    askJev(ANGRY, {
-      needs_human_call: {
-        type: 'noul',
-        instructions: 'Is this customer asking for a phone call from a person?',
-      },
-      anger: {
-        type: 'score',
-        instructions: 'How angry is this customer?',
-        criteria: ['Calm', 'Frustrated but civil', 'Very angry'],
-      },
-    }),
-  ]);
-
-  const anger = jev.answers.anger?.score;
-  const wantsCall = (jev.answers.needs_human_call?.noul || 0) >= 0.5;
-  const hot = anger != null && anger >= 2;
-
-  return {
-    n: 6,
-    models: models(),
-    rounds: [
-      {
-        input: ANGRY,
-        llm: {
-          ...side(llm),
-          prose: llm.text.trim(),
-          rows: [],
-        },
-        jev: {
-          ms: null,
-          cost: null,
-          rows: [],
-          absent:
-            'Jev answers choice / score / noul. Asking it to draft an email is a category error, like asking a thermometer for the weather forecast.',
-        },
-      },
-      {
-        caption: 'The pattern you actually ship — Jev decides, the LLM writes',
-        llm: {
-          ms: null,
-          cost: null,
-          rows: [],
-          note: hot
-            ? 'Anger is at the top of the scale, so this never gets auto-replied. It pages a human, and the LLM drafts a suggestion for them to edit.'
-            : 'Calm enough to auto-reply; the LLM drafts it and it goes out.',
-        },
-        jev: {
-          ...side(jev),
-          rows: [
-            { label: 'anger', value: show(anger) },
-            { label: 'wants a call', value: show(wantsCall) },
-          ],
-        },
-      },
-    ],
-  };
+  const rounds = await Promise.all(CUSTOMERS.map(([label, message]) => customerStep(label, message)));
+  return { n: 6, models: models(), rounds };
 }
 
 const RUNNERS = {
