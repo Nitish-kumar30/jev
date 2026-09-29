@@ -23,15 +23,20 @@ export default function TabNav({ tabs, active, onChange, light = false }) {
       {tabs.map((tab) => {
         const selected = tab.id === active;
         return (
-          <button
+          <a
             key={tab.id}
+            href={tab.href}
             role="tab"
             id={`tab-${tab.id}`}
             aria-selected={selected}
             aria-controls={`panel-${tab.id}`}
             tabIndex={selected ? 0 : -1}
-            onClick={() => onChange(tab.id)}
-            className="relative rounded-full px-4 py-2 text-xs font-semibold transition sm:px-5 sm:text-sm"
+            onClick={(e) => {
+              if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+              e.preventDefault();
+              onChange(tab.id);
+            }}
+            className="relative rounded-full px-4 py-2 text-xs font-semibold no-underline transition sm:px-5 sm:text-sm"
           >
             {selected ? (
               <motion.span
@@ -57,7 +62,7 @@ export default function TabNav({ tabs, active, onChange, light = false }) {
             >
               {tab.label}
             </span>
-          </button>
+          </a>
         );
       })}
     </div>

@@ -22,13 +22,37 @@ function readLightTheme() {
 }
 
 const TABS = [
-  { id: 'race', label: 'Ticket Sorting Race' },
-  { id: 'gate', label: 'Agent Safety Gate' },
-  { id: 'examples', label: 'Examples' },
+  { id: 'race', label: 'Ticket Sorting Race', href: '/' },
+  { id: 'gate', label: 'Agent Safety Gate', href: '/gate' },
+  { id: 'examples', label: 'Examples', href: '/examples' },
 ];
 
+const tabFromPath = (pathname) => {
+  const path = pathname.replace(/\/+$/, '') || '/';
+  return TABS.find((tab) => tab.href === path)?.id ?? null;
+};
+
 export default function App() {
-  const [tab, setTab] = useState('race');
+  const [tab, setTabState] = useState(() => tabFromPath(window.location.pathname) ?? 'race');
+
+  useEffect(() => {
+    if (tabFromPath(window.location.pathname)) return;
+    window.history.replaceState({ tab: 'race' }, '', '/');
+  }, []);
+
+  useEffect(() => {
+    const onPop = () => setTabState(tabFromPath(window.location.pathname) ?? 'race');
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  const setTab = (id) => {
+    const next = TABS.find((item) => item.id === id) ?? TABS[0];
+    if (window.location.pathname !== next.href) {
+      window.history.pushState({ tab: next.id }, '', next.href);
+    }
+    setTabState(next.id);
+  };
   const [light, setLight] = useState(readLightTheme);
   const { toasts, dismissToast } = useMode();
 
