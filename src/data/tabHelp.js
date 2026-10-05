@@ -34,7 +34,8 @@ export const TAB_HELP = {
     about:
       'The question is simple: does this message contain an email address, a phone number, or a credit card number? A chatbot writes a sentence and some JSON. Jev returns three probabilities, one for each kind of private data.',
     steps: [
-      'Pick a sample message, then press Play.',
+      'Pick a sample message, or type your own in Live mode and press Check live.',
+      'We look for an actual email address, phone number, or card number — mentioning “email” in a sentence is not the same as containing one.',
       'Scene 01 is the chatbot writing. Scene 02 is Jev’s three probabilities. Scene 03 puts them side by side.',
       'Buttons 01, 02, and 03 jump straight to that finished scene and leave it paused. Press Play to continue, Replay to start over, or Skip to end.',
       'On scene 03, move the threshold slider. A higher bar means Jev must be more sure before a field counts as private data.',

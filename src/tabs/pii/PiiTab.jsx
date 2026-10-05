@@ -27,6 +27,8 @@ export default function PiiTab({ light = false }) {
   const [threshold, setThreshold] = useState(0.5);
   const [liveResult, setLiveResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [pendingMessage, setPendingMessage] = useState(null);
+  const [jumpToCompare, setJumpToCompare] = useState(false);
   const rootRef = useRef(null);
 
   const preset = PII_PRESETS.find((p) => p.id === presetId) ?? PII_PRESETS[0];
@@ -39,24 +41,42 @@ export default function PiiTab({ light = false }) {
 
   // Live: ask both models first, then play the same scenes with the timers
   // stopping at the measured latency. Any failure falls back to the preset.
+  const liveMessage = useCallback(() => {
+    const typed = custom.trim();
+    return typed || preset.message;
+  }, [custom, preset.message]);
+
   const runLive = useCallback(
-    async (message) => {
+    async (message, { after = 'play' } = {}) => {
       reset();
+      setLiveResult(null);
+      setPendingMessage(message);
+      setJumpToCompare(false);
       setLoading(true);
       try {
         const res = await detectPii(message);
         setLiveResult({ ...res, simulated: false });
-        play();
+        if (after === 'compare') setJumpToCompare(true);
+        else play();
       } catch (err) {
         // Drops to Demo mode; the preset's first frame and Play button come back.
         fallbackToDemo(`Live PII request failed: ${err.message}`);
         setLiveResult(null);
       } finally {
         setLoading(false);
+        setPendingMessage(null);
       }
     },
     [reset, play, fallbackToDemo]
   );
+
+  // After a live “Check live” run, scenes need one frame with the new timings
+  // before we can seek to the finished comparison.
+  useEffect(() => {
+    if (!jumpToCompare || !liveResult) return;
+    goToScene(2);
+    setJumpToCompare(false);
+  }, [jumpToCompare, liveResult, goToScene]);
 
   // Back in Demo mode, drop any live answer and show the preset again.
   useEffect(() => {
@@ -75,9 +95,9 @@ export default function PiiTab({ light = false }) {
   /** Play, except that a fresh Live run fetches real answers first. */
   const start = useCallback(() => {
     if (loading) return;
-    if (isLive && !liveResult) runLive(preset.message);
+    if (isLive && !liveResult) runLive(liveMessage());
     else play();
-  }, [loading, isLive, liveResult, runLive, preset.message, play]);
+  }, [loading, isLive, liveResult, runLive, liveMessage, play]);
 
   const toggleOrStart = useCallback(() => {
     if (!playing && !started && isLive && !liveResult) start();
@@ -243,7 +263,7 @@ export default function PiiTab({ light = false }) {
         enabled={isLive}
         value={custom}
         onChange={setCustom}
-        onSubmit={runLive}
+        onSubmit={(msg) => runLive(msg, { after: 'compare' })}
         busy={loading}
       />
 
@@ -264,28 +284,43 @@ export default function PiiTab({ light = false }) {
         aria-label={`PII scene ${sceneIndex + 1} of 3: ${SCENE_NAMES[sceneIndex]}. Press Space to play or pause.`}
         className="relative rounded-3xl"
       >
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={sceneIndex}
-            initial={{ opacity: 0, y: reduced ? 0 : 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: reduced ? 0 : -6 }}
-            transition={{ duration: reduced ? 0 : 0.3 }}
-          >
-            {scenes[sceneIndex]}
-          </motion.div>
-        </AnimatePresence>
-
-        {loading ? (
+        {loading && isLive ? (
           <div
-            className={`absolute inset-0 grid place-items-center rounded-3xl ${light ? 'bg-[#F7F5F0]/70' : 'bg-black/40'}`}
+            className={`grid min-h-[22rem] place-items-center rounded-3xl px-6 py-16 text-center ${
+              light ? 'border border-[#E4E0D6] bg-[#FDFCFA]' : 'glass'
+            }`}
             role="status"
           >
-            <span className={`font-mono text-sm ${light ? 'text-[#141B2E]' : 'text-slate-100'}`}>
-              Asking the LLM and Jev…
-            </span>
+            <div>
+              <p className={`font-mono text-sm ${light ? 'text-[#141B2E]' : 'text-slate-100'}`}>
+                Asking the LLM and Jev…
+              </p>
+              {pendingMessage ? (
+                <p
+                  className={`mx-auto mt-4 max-w-xl break-words font-mono text-[13px] leading-relaxed ${
+                    light ? 'text-[#243044]' : 'text-slate-300'
+                  }`}
+                >
+                  {pendingMessage}
+                </p>
+              ) : null}
+            </div>
           </div>
-        ) : !started && !playing ? (
+        ) : (
+          <>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={sceneIndex}
+                initial={{ opacity: 0, y: reduced ? 0 : 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: reduced ? 0 : -6 }}
+                transition={{ duration: reduced ? 0 : 0.3 }}
+              >
+                {scenes[sceneIndex]}
+              </motion.div>
+            </AnimatePresence>
+
+            {!started && !playing ? (
           <div className="absolute inset-0 grid place-items-center rounded-3xl">
             <button
               type="button"
@@ -300,7 +335,9 @@ export default function PiiTab({ light = false }) {
               <span aria-hidden="true">▶</span> Play
             </button>
           </div>
-        ) : null}
+            ) : null}
+          </>
+        )}
       </div>
 
       <div aria-live="polite" className="sr-only">
@@ -446,7 +483,11 @@ export function LiveTextBox({ light, enabled, value, onChange, onSubmit, busy = 
         maxLength={2000}
         disabled={!enabled}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={enabled ? 'Type your own message to check for PII' : 'Your own message — switch to Live mode to use this'}
+        placeholder={
+          enabled
+            ? 'Type a message — we look for an email address, phone number, or card number in the text'
+            : 'Your own message — switch to Live mode to use this'
+        }
         className={`min-w-0 flex-1 rounded-lg border px-3 py-2 font-mono text-sm disabled:cursor-not-allowed disabled:opacity-60 ${
           light
             ? 'border-[#C9C3B6] bg-white text-[#0F1724] placeholder:text-[#5C6778]'

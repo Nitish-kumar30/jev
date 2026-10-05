@@ -24,6 +24,17 @@ export default function SideBySide({ result, threshold, onThreshold, progress, s
       </div>
       <h3 className={`mt-1 text-xl font-semibold tracking-tight sm:text-2xl ${text}`}>Side by side</h3>
 
+      {result.message ? (
+        <div
+          className={`mt-4 rounded-xl px-4 py-3 ${
+            light ? 'border border-[#E4E0D6] bg-white' : 'border border-white/10 bg-black/20'
+          }`}
+        >
+          <p className={`font-mono text-[10px] uppercase tracking-[0.14em] ${muted}`}>Message checked</p>
+          <p className={`mt-1.5 break-words font-mono text-[13px] leading-relaxed ${text}`}>{result.message}</p>
+        </div>
+      ) : null}
+
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <Reveal progress={progress.llm}>
           <Column
