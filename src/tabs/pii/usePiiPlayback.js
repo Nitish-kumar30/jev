@@ -131,11 +131,12 @@ export function usePiiPlayback({ llmMs, jevMs, reduced }) {
     seek(0);
     setPlaying(true);
   }, [seek]);
-  // Jumping to a scene plays it: its first frame is empty by design.
+  // Jumping to a scene shows its finished frame and stays paused.
   const goToScene = useCallback(
     (index) => {
-      seek(scenes[index].offset);
-      setPlaying(true);
+      const scene = scenes[index];
+      setPlaying(false);
+      seek(scene.offset + scene.length - scene.hold);
     },
     [scenes, seek]
   );

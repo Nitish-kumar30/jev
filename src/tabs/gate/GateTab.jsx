@@ -8,6 +8,7 @@ import { PRESET_ACTIONS, SNEAKY_EMAIL } from '../../data/actions.js';
 import { DECISIONS, evaluateAction } from '../../lib/gateEngine.js';
 import { gateWithJev } from '../../lib/api.js';
 import { useMode } from '../../lib/ModeContext.jsx';
+import TabHelp from '../../components/TabHelp.jsx';
 
 const now = () =>
   new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -82,13 +83,18 @@ export default function GateTab({ light = false }) {
 
   return (
     <div className="space-y-5">
-      <div className="text-center">
-        <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Agent Safety Gate</h2>
-        <p className={`mx-auto mt-2 max-w-2xl text-sm leading-relaxed ${light ? 'text-[#243044]' : 'text-slate-400'}`}>
-          Before an AI agent does something in the real world, Jev decides whether it may:
-          go ahead, check with a person, or stop. The confidence value is what makes the
-          middle answer possible.
-        </p>
+      <div className="relative text-center">
+        <div className="sm:px-28">
+          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Agent Safety Gate</h2>
+          <p className={`mx-auto mt-2 max-w-2xl text-sm leading-relaxed ${light ? 'text-[#243044]' : 'text-slate-400'}`}>
+            Before an AI agent does something in the real world, Jev decides whether it may:
+            go ahead, check with a person, or stop. The confidence value is what makes the
+            middle answer possible.
+          </p>
+        </div>
+        <div className="mt-3 flex justify-center sm:absolute sm:right-0 sm:top-1 sm:mt-0">
+          <TabHelp id="gate" light={light} />
+        </div>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[1.1fr_auto_1fr]">

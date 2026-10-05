@@ -4,6 +4,7 @@ import { useMode } from '../../lib/ModeContext.jsx';
 import { runExample } from '../../lib/api.js';
 import CodePanel from './CodePanel.jsx';
 import { EXAMPLES } from './snippets.js';
+import TabHelp from '../../components/TabHelp.jsx';
 
 function money(cost) {
   return cost == null || Number.isNaN(Number(cost)) ? 'not reported' : `$${Number(cost).toFixed(8)}`;
@@ -317,12 +318,17 @@ export default function ExamplesTab({ light = false }) {
       </nav>
 
       <div className="min-w-0 space-y-8">
-      <div className="text-center">
-        <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Jev vs a chat LLM</h2>
-        <p className={`mx-auto mt-2 max-w-2xl text-sm leading-relaxed ${light ? 'text-[#243044]' : 'text-slate-400'}`}>
-          Six tasks, done both ways. Chat goes to completions and comes back as prose. Jev goes to
-          systemone and comes back typed. Example 6 is where Jev routes and the LLM writes.
-        </p>
+      <div className="relative text-center">
+        <div className="sm:px-28">
+          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Jev vs a chat LLM</h2>
+          <p className={`mx-auto mt-2 max-w-2xl text-sm leading-relaxed ${light ? 'text-[#243044]' : 'text-slate-400'}`}>
+            Six tasks, done both ways. Chat goes to completions and comes back as prose. Jev goes to
+            systemone and comes back typed. Example 6 is where Jev routes and the LLM writes.
+          </p>
+        </div>
+        <div className="mt-3 flex justify-center sm:absolute sm:right-0 sm:top-1 sm:mt-0">
+          <TabHelp id="examples" light={light} />
+        </div>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
           <button type="button" onClick={runAll} disabled={runningAll} className={runButtonClass(light)}>
             {runningAll ? 'Running all…' : isLive ? 'Run all' : 'Run all in Live'}

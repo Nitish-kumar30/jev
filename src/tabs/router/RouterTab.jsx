@@ -8,11 +8,37 @@ import RouteDrawer from './RouteDrawer.jsx';
 import { useRouter } from './useRouter.js';
 import { routerTheme } from './theme.js';
 import { SimulatedBadge } from '../../components/ui.jsx';
+import CodePanel from '../examples/CodePanel.jsx';
 import { ROUTER_REQUESTS } from '../../data/routerRequests.js';
 import { ROUTER_MODELS, SPEED_OPTIONS } from '../../lib/constants.js';
 import { priceRequest } from '../../lib/routerEngines.js';
 import { useMode } from '../../lib/ModeContext.jsx';
 import { checkBackendHealth } from '../../lib/api.js';
+import TabHelp from '../../components/TabHelp.jsx';
+
+/** The LangChain harness this tab is recreating. Shown, not executed. */
+const ROUTER_SNIPPET = `from langchain.agents import create_agent
+from langchain_typesafe.experimental.middleware import (
+    ModelChoice,
+    ModelRouterMiddleware,
+)
+
+router = ModelRouterMiddleware(
+    choices={
+        "fast": ModelChoice(
+            model="openai:luna",
+            criteria="Direct lookups, extraction, and localized changes.",
+        ),
+        "powerful": ModelChoice(
+            model="openai:sol",
+            criteria="Architecture and high-stakes decisions.",
+        ),
+    },
+    instructions="Choose the least costly model that can complete the task.",
+)
+
+agent = create_agent("openai:gpt-5.6-luna", middleware=[router])
+`;
 
 /** Every request priced on the powerful model: fixes the chart's y-scale before the run. */
 const FULL_BASELINE = ROUTER_REQUESTS.reduce((sum, r) => sum + priceRequest(r.tokens, 'powerful'), 0);
@@ -50,7 +76,7 @@ export default function RouterTab({ light = false }) {
     [fallbackToDemo]
   );
 
-  const { status, speed, setSpeed, threshold, setThreshold, current, score, wallMs, total, start, reset } = useRouter({
+  const { status, speed, setSpeed, threshold, setThreshold, current, score, wallMs, total, paused, start, pause, resume, reset } = useRouter({
     live: isLive,
     answer,
     onLiveFailure,
@@ -70,17 +96,22 @@ export default function RouterTab({ light = false }) {
 
   return (
     <div className="space-y-5">
-      <div className="text-center">
-        <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Model Router</h2>
-        <p className={`mx-auto mt-2 max-w-2xl text-sm leading-relaxed ${t.body}`}>
-          Jev picks the cheapest model that can do the job. When it isn't sure, it picks the
-          powerful one.
-        </p>
-        <p className={`mx-auto mt-1 max-w-2xl text-xs leading-relaxed ${t.muted}`}>
-          Before each request reaches an LLM, Jev answers one question — <span className="font-mono">fast</span> or{' '}
-          <span className="font-mono">powerful</span> — with the instruction “Choose the least costly model that can
-          complete the task.” The pattern is from LangChain's “Building a harness with Jev”.
-        </p>
+      <div className="relative text-center">
+        <div className="sm:px-28">
+          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Model Router</h2>
+          <p className={`mx-auto mt-2 max-w-2xl text-sm leading-relaxed ${t.body}`}>
+            Jev picks the cheapest model that can do the job. When it isn't sure, it picks the
+            powerful one.
+          </p>
+          <p className={`mx-auto mt-1 max-w-2xl text-xs leading-relaxed ${t.muted}`}>
+            Before each request reaches an LLM, Jev answers one question — <span className="font-mono">fast</span> or{' '}
+            <span className="font-mono">powerful</span> — with the instruction “Choose the least costly model that can
+            complete the task.” The pattern is from LangChain's “Building a harness with Jev”.
+          </p>
+        </div>
+        <div className="mt-3 flex justify-center sm:absolute sm:right-0 sm:top-1 sm:mt-0">
+          <TabHelp id="router" light={light} />
+        </div>
       </div>
 
       {/* Header strip */}
@@ -95,8 +126,22 @@ export default function RouterTab({ light = false }) {
               : 'bg-gradient-to-r from-[var(--color-jev-deep)] to-[var(--color-jev)] text-[#04060f] shadow-[0_0_40px_-12px_var(--color-jev)]'
           }`}
         >
-          {running ? 'Start again' : status === 'done' ? 'Run again' : 'Start'}
+          {running || paused ? 'Start again' : status === 'done' ? 'Run again' : 'Start'}
         </motion.button>
+        {isLive ? (
+          <button
+            type="button"
+            onClick={paused ? resume : pause}
+            disabled={!running && !paused}
+            aria-pressed={paused}
+            aria-label={paused ? 'Resume routing' : 'Pause before the next request'}
+            className={`rounded-xl border px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.16em] disabled:cursor-not-allowed disabled:opacity-40 ${
+              light ? 'border-[#E4E0D6] text-[#243044] hover:border-[#141B2E]' : 'border-white/12 text-slate-300 hover:border-white/30'
+            }`}
+          >
+            {paused ? 'Resume' : 'Pause'}
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => {
@@ -205,6 +250,8 @@ export default function RouterTab({ light = false }) {
       <div aria-live="polite" className="sr-only">
         {status === 'done' ? `Run finished. ${summarySentence(score, threshold)}` : ''}
       </div>
+
+      <CodePanel code={ROUTER_SNIPPET} light={light} />
 
       <RouteDrawer row={selected} onClose={() => setSelectedId(null)} t={t} />
     </div>
