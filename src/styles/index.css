@@ -42,6 +42,10 @@
   --color-powerful-ink: #6d28d9;
   --color-underpowered: var(--color-block);
   --color-overspent: var(--color-ask);
+  /* Cost chart lines: validated pair (dataviz validate_palette.js), both themes */
+  --color-chart-fast: #0d9488;
+  --color-chart-powerful: #8b5cf6;
+  --color-chart-powerful-light: #6d28d9;
 }
 
 @layer base {

@@ -11,6 +11,7 @@ import RaceTab from './tabs/race/RaceTab.jsx';
 import GateTab from './tabs/gate/GateTab.jsx';
 import ExamplesTab from './tabs/examples/ExamplesTab.jsx';
 import PiiTab from './tabs/pii/PiiTab.jsx';
+import RouterTab from './tabs/router/RouterTab.jsx';
 
 const THEME_KEY = 'jev-home-theme';
 
@@ -25,8 +26,9 @@ function readLightTheme() {
 const TABS = [
   { id: 'race', label: 'Ticket Sorting Race', href: '/' },
   { id: 'gate', label: 'Agent Safety Gate', href: '/gate' },
-  { id: 'examples', label: 'Examples', href: '/examples' },
   { id: 'pii', label: 'PII Detection', href: '/pii' },
+  { id: 'router', label: 'Model Router', href: '/router' },
+  { id: 'examples', label: 'Examples', href: '/examples' },
 ];
 
 const tabFromPath = (pathname) => {
@@ -128,7 +130,7 @@ export default function App() {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.25 }}
             className={
-              tab === 'examples' || tab === 'pii'
+              tab === 'examples' || tab === 'pii' || tab === 'router'
                 ? 'mx-auto mt-6 w-full max-w-[88rem] px-4 sm:px-6'
                 : 'mx-auto mt-12 w-full max-w-6xl px-5'
             }
@@ -137,6 +139,8 @@ export default function App() {
               <RaceTab light={light} />
             ) : tab === 'gate' ? (
               <GateTab light={light} />
+            ) : tab === 'router' ? (
+              <RouterTab light={light} />
             ) : tab === 'examples' ? (
               <ExamplesTab light={light} />
             ) : (
