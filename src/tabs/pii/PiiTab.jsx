@@ -10,6 +10,7 @@ import { PII_FIELDS, PII_INSTRUCTIONS, PII_PRESETS, demoResultFor } from '../../
 import { useMode } from '../../lib/ModeContext.jsx';
 import { detectPii } from '../../lib/api.js';
 import { usePrefersReducedMotion } from '../../lib/useReducedMotion.js';
+import TabHelp from '../../components/TabHelp.jsx';
 
 const SCENE_NAMES = ['How an LLM answers', 'How Jev answers', 'Side by side'];
 const INTERACTIVE = 'button, input, textarea, select, a, [role="switch"], [role="tab"]';
@@ -221,13 +222,18 @@ export default function PiiTab({ light = false }) {
 
   return (
     <div className="space-y-5" ref={rootRef}>
-      <div className="text-center">
-        <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">PII Detection</h2>
-        <p className={`mx-auto mt-2 max-w-2xl text-sm leading-relaxed ${light ? 'text-[#243044]' : 'text-slate-400'}`}>
-          One question, asked two ways: does this message contain an email address, a phone
-          number, or a credit card number? Watch an LLM write its answer, then watch Jev
-          return three probabilities.
-        </p>
+      <div className="relative text-center">
+        <div className="sm:px-28">
+          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">PII Detection</h2>
+          <p className={`mx-auto mt-2 max-w-2xl text-sm leading-relaxed ${light ? 'text-[#243044]' : 'text-slate-400'}`}>
+            One question, asked two ways: does this message contain an email address, a phone
+            number, or a credit card number? Watch an LLM write its answer, then watch Jev
+            return three probabilities.
+          </p>
+        </div>
+        <div className="mt-3 flex justify-center sm:absolute sm:right-0 sm:top-1 sm:mt-0">
+          <TabHelp id="pii" light={light} />
+        </div>
       </div>
 
       <PresetPicker light={light} presetId={presetId} onPick={pickPreset} />

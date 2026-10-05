@@ -6,6 +6,7 @@ import DetailDrawer from './DetailDrawer.jsx';
 import { useRace } from './useRace.js';
 import { SPEED_OPTIONS } from '../../lib/constants.js';
 import { useMode } from '../../lib/ModeContext.jsx';
+import TabHelp from '../../components/TabHelp.jsx';
 
 export default function RaceTab({ light = false }) {
   const { isDemo, isLive, fallbackToDemo } = useMode();
@@ -25,12 +26,17 @@ export default function RaceTab({ light = false }) {
 
   return (
     <div className="space-y-5">
-      <div className="text-center">
-        <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Ticket Sorting Race</h2>
-        <p className={`mx-auto mt-2 max-w-2xl text-sm leading-relaxed ${light ? 'text-[#243044]' : 'text-slate-400'}`}>
-          The same 50 customer messages go to both engines. Each one sorts them into Billing,
-          Technical, Refund or Spam — one message at a time, so you can watch the difference.
-        </p>
+      <div className="relative text-center">
+        <div className="sm:px-28">
+          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Ticket Sorting Race</h2>
+          <p className={`mx-auto mt-2 max-w-2xl text-sm leading-relaxed ${light ? 'text-[#243044]' : 'text-slate-400'}`}>
+            The same 50 customer messages go to both engines. Each one sorts them into Billing,
+            Technical, Refund or Spam — one message at a time, so you can watch the difference.
+          </p>
+        </div>
+        <div className="mt-3 flex justify-center sm:absolute sm:right-0 sm:top-1 sm:mt-0">
+          <TabHelp id="race" light={light} />
+        </div>
       </div>
 
       {/* Controls */}

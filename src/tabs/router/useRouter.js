@@ -14,11 +14,12 @@ const emptyRun = () => ({ results: [], current: null, startedAt: null, finishedA
  * number on screen is re-scored from stored confidences via scoreRun().
  */
 export function useRouter({ live, answer = false, onLiveFailure }) {
-  const [status, setStatus] = useState('idle'); // idle | running | done
+  const [status, setStatus] = useState('idle'); // idle | running | paused | done
   const [speed, setSpeed] = useState(1);
   const [threshold, setThreshold] = useState(ROUTER_FALLBACK_THRESHOLD);
   const [run, setRun] = useState(emptyRun);
   const [now, setNow] = useState(0);
+  const [paused, setPaused] = useState(false);
 
   const speedRef = useRef(speed);
   speedRef.current = speed;
@@ -27,6 +28,13 @@ export function useRouter({ live, answer = false, onLiveFailure }) {
   const answerRef = useRef(answer);
   answerRef.current = answer;
   const runToken = useRef(0);
+  const pausedRef = useRef(false);
+  const pauseWaiters = useRef([]);
+
+  const releasePause = () => {
+    const pending = pauseWaiters.current.splice(0);
+    pending.forEach((resolve) => resolve());
+  };
 
   useEffect(() => {
     if (status !== 'running') return undefined;
@@ -41,12 +49,33 @@ export function useRouter({ live, answer = false, onLiveFailure }) {
 
   const reset = useCallback(() => {
     runToken.current += 1;
+    pausedRef.current = false;
+    setPaused(false);
+    releasePause();
     setRun(emptyRun());
     setStatus('idle');
   }, []);
 
+  const pause = useCallback(() => {
+    if (pausedRef.current) return;
+    pausedRef.current = true;
+    setPaused(true);
+    setStatus((current) => (current === 'running' ? 'paused' : current));
+  }, []);
+
+  const resume = useCallback(() => {
+    if (!pausedRef.current) return;
+    pausedRef.current = false;
+    setPaused(false);
+    setStatus((current) => (current === 'paused' ? 'running' : current));
+    releasePause();
+  }, []);
+
   const start = useCallback(() => {
     runToken.current += 1;
+    pausedRef.current = false;
+    setPaused(false);
+    releasePause();
     const token = runToken.current;
     const engine = createRouterEngine({
       live,
@@ -64,6 +93,16 @@ export function useRouter({ live, answer = false, onLiveFailure }) {
     (async () => {
       for (const request of ROUTER_REQUESTS) {
         if (runToken.current !== token) return;
+        if (pausedRef.current) {
+          await new Promise((resolve) => {
+            const finish = () => {
+              if (runToken.current !== token || !pausedRef.current) resolve();
+              else pauseWaiters.current.push(finish);
+            };
+            finish();
+          });
+          if (runToken.current !== token) return;
+        }
         setRun((prev) => ({ ...prev, current: request }));
         let result;
         try {
@@ -102,7 +141,10 @@ export function useRouter({ live, answer = false, onLiveFailure }) {
     score,
     wallMs,
     total: ROUTER_REQUESTS.length,
+    paused,
     start,
+    pause,
+    resume,
     reset,
   };
 }

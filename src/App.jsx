@@ -150,7 +150,7 @@ export default function App() {
         </AnimatePresence>
       </main>
 
-      <Toasts toasts={toasts} onDismiss={dismissToast} />
+      <Toasts toasts={toasts} onDismiss={dismissToast} light={light} />
     </div>
   );
 }

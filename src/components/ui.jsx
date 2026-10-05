@@ -85,7 +85,7 @@ export function Stat({ label, children, tone = 'default', light = false }) {
   );
 }
 
-export function Toasts({ toasts, onDismiss }) {
+export function Toasts({ toasts, onDismiss, light = false }) {
   return (
     <div
       className="pointer-events-none fixed bottom-5 right-5 z-50 flex w-[min(92vw,22rem)] flex-col gap-2"
@@ -98,19 +98,25 @@ export function Toasts({ toasts, onDismiss }) {
           initial={{ opacity: 0, y: 16, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0 }}
-          className={`glass pointer-events-auto rounded-xl p-3 text-sm ${
-            t.tone === 'warn' ? 'border-amber-300/40' : 'border-cyan-300/30'
+          className={`pointer-events-auto rounded-xl border p-3 text-sm shadow-lg ${
+            light
+              ? t.tone === 'warn'
+                ? 'border-[#E8C48A] bg-[#FFF6E8] text-[#141B2E]'
+                : 'border-[#E4E0D6] bg-[#FDFCFA] text-[#141B2E]'
+              : t.tone === 'warn'
+                ? 'glass border-amber-300/40'
+                : 'glass border-cyan-300/30'
           }`}
         >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="font-semibold text-slate-100">{t.title}</div>
-              {t.body ? <div className="mt-0.5 text-slate-300">{t.body}</div> : null}
+              <div className={`font-semibold ${light ? 'text-[#141B2E]' : 'text-slate-100'}`}>{t.title}</div>
+              {t.body ? <div className={`mt-0.5 ${light ? 'text-[#243044]' : 'text-slate-300'}`}>{t.body}</div> : null}
             </div>
             <button
               type="button"
               onClick={() => onDismiss(t.id)}
-              className="rounded px-1 text-slate-400 hover:text-slate-100"
+              className={`rounded px-1 ${light ? 'text-[#3E4A5C] hover:text-[#141B2E]' : 'text-slate-400 hover:text-slate-100'}`}
               aria-label="Dismiss notification"
             >
               ×
