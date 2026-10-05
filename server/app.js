@@ -7,8 +7,8 @@
  */
 import express from 'express';
 import cors from 'cors';
-import { hasJevKey, jevClassify, jevGate } from './adapters/jev.js';
-import { hasLlmKey, llmClassify } from './adapters/llm.js';
+import { hasJevKey, jevClassify, jevGate, jevRoute } from './adapters/jev.js';
+import { hasLlmKey, llmAnswer, llmClassify, routerModels } from './adapters/llm.js';
 import { openRouterKey, runExample } from './examples.js';
 import { detectPii, PII_MAX_CHARS } from './pii.js';
 
@@ -18,7 +18,8 @@ app.use(express.json({ limit: '64kb' }));
 
 /** The frontend calls this before switching to Live mode. */
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, jevKey: hasJevKey(), llmKey: hasLlmKey() });
+  // routerModels names the two lanes in the Model Router tab (ROUTER_FAST_MODEL / ROUTER_POWERFUL_MODEL).
+  res.json({ ok: true, jevKey: hasJevKey(), llmKey: hasLlmKey(), routerModels: routerModels() });
 });
 
 const requireKey = (present, name) => (req, res, next) => {
@@ -73,6 +74,46 @@ app.post('/api/pii', requireKey(() => Boolean(openRouterKey()), 'OPENROUTER_API_
   }
   try {
     res.json(await detectPii(message));
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+const ROUTER_MAX_CHARS = 4000;
+
+const routerRequest = (req, res) => {
+  const request = asText(req.body?.request);
+  if (!request) {
+    res.status(400).json({ error: 'request is required' });
+    return null;
+  }
+  if (request.length > ROUTER_MAX_CHARS) {
+    res.status(400).json({ error: `request must be ${ROUTER_MAX_CHARS.toLocaleString('en-US')} characters or fewer` });
+    return null;
+  }
+  return request;
+};
+
+app.post('/api/jev/route', requireKey(hasJevKey, 'OPENROUTER_API_KEY'), async (req, res) => {
+  const request = routerRequest(req, res);
+  if (request === null) return;
+  try {
+    res.json(await jevRoute(request));
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// Off by default in the UI: every call here is a real, billed model answer.
+app.post('/api/llm/answer', requireKey(hasLlmKey, 'OPENROUTER_API_KEY'), async (req, res) => {
+  const request = routerRequest(req, res);
+  if (request === null) return;
+  const tier = req.body?.tier;
+  if (tier !== 'fast' && tier !== 'powerful') {
+    return res.status(400).json({ error: "tier must be 'fast' or 'powerful'" });
+  }
+  try {
+    res.json(await llmAnswer(request, tier));
   } catch (err) {
     res.status(502).json({ error: err.message });
   }

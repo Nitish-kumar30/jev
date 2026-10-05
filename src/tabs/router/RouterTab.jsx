@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import RequestQueue from './RequestQueue.jsx';
 import Lanes from './Lanes.jsx';
@@ -12,6 +12,7 @@ import { ROUTER_REQUESTS } from '../../data/routerRequests.js';
 import { ROUTER_MODELS, SPEED_OPTIONS } from '../../lib/constants.js';
 import { priceRequest } from '../../lib/routerEngines.js';
 import { useMode } from '../../lib/ModeContext.jsx';
+import { checkBackendHealth } from '../../lib/api.js';
 
 /** Every request priced on the powerful model: fixes the chart's y-scale before the run. */
 const FULL_BASELINE = ROUTER_REQUESTS.reduce((sum, r) => sum + priceRequest(r.tokens, 'powerful'), 0);
@@ -25,6 +26,24 @@ export default function RouterTab({ light = false }) {
   const t = routerTheme(light);
   const { isDemo, isLive, fallbackToDemo } = useMode();
   const [selectedId, setSelectedId] = useState(null);
+  const [answer, setAnswer] = useState(false); // real, billed model answers — off by default
+  const [liveModels, setLiveModels] = useState(null);
+
+  // In Live mode the lanes show the models the server will actually call.
+  useEffect(() => {
+    if (!isLive) {
+      setLiveModels(null);
+      setAnswer(false);
+      return;
+    }
+    let cancelled = false;
+    checkBackendHealth().then((h) => {
+      if (!cancelled && h.routerModels) setLiveModels(h.routerModels);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isLive]);
 
   const onLiveFailure = useCallback(
     (err) => fallbackToDemo(`Live routing failed: ${err.message}`),
@@ -33,11 +52,12 @@ export default function RouterTab({ light = false }) {
 
   const { status, speed, setSpeed, threshold, setThreshold, current, score, wallMs, total, start, reset } = useRouter({
     live: isLive,
+    answer,
     onLiveFailure,
   });
 
   const running = status === 'running';
-  const models = ROUTER_MODELS;
+  const models = liveModels ?? ROUTER_MODELS;
   const selected = useMemo(
     () => (selectedId == null ? null : score.rows.find((r) => r.request.id === selectedId) ?? null),
     [score.rows, selectedId]
@@ -135,12 +155,40 @@ export default function RouterTab({ light = false }) {
           {(wallMs / 1000).toFixed(1)}s · {score.done}/{total}
         </span>
         {isDemo ? <SimulatedBadge light={light} /> : null}
+
+        <div className="flex basis-full flex-wrap items-center justify-center gap-2">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={answer}
+            disabled={!isLive || running}
+            onClick={() => setAnswer((v) => !v)}
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+              light ? 'border-[#E4E0D6] text-[#243044]' : 'border-white/12 text-slate-300'
+            }`}
+          >
+            <span
+              aria-hidden="true"
+              className={`relative h-4 w-7 rounded-full ${answer ? (light ? 'bg-[#00897B]' : 'bg-[var(--color-jev)]') : light ? 'bg-[#C9C3B6]' : 'bg-white/20'}`}
+            >
+              <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-[left] ${answer ? 'left-3.5' : 'left-0.5'}`} />
+            </span>
+            Answer each request
+          </button>
+          <span className={`text-[11px] ${t.muted}`}>
+            {!isLive
+              ? 'Live mode only. Off by default: it calls a real model for all 24 requests and costs real money.'
+              : answer
+                ? 'On: each request is really answered by the routed model; its real cost replaces the estimate.'
+                : 'Off: Jev routing is real, model costs are estimated from token counts at list price.'}
+          </span>
+        </div>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.25fr)_minmax(0,1.05fr)]">
         <RequestQueue rows={score.rows} current={current} onSelect={(r) => setSelectedId(r.request.id)} t={t} />
         <Lanes rows={score.rows} models={models} onSelect={(r) => setSelectedId(r.request.id)} t={t} />
-        <CostRace score={score} scaleMax={FULL_BASELINE} simulated={isDemo} liveEstimated={false} t={t} />
+        <CostRace score={score} scaleMax={FULL_BASELINE} simulated={isDemo} liveEstimated={isLive && !answer} t={t} />
       </div>
 
       {status === 'done' ? (

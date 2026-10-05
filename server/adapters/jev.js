@@ -115,3 +115,33 @@ export async function jevGate(action, fetchedContent) {
     latencyMs,
   };
 }
+
+const ROUTER_TIERS = ['fast', 'powerful'];
+
+/**
+ * Model routing, after LangChain's "Building a harness with Jev": one choice
+ * question before a request reaches an LLM — the cheap fast model, or the
+ * expensive capable one. The fallback rule (low confidence → powerful) is
+ * applied by the caller, so the threshold can change without a new call.
+ *
+ * @returns {Promise<{choice: 'fast'|'powerful', confidence: number|null, latencyMs: number, cost?: number}>}
+ */
+export async function jevRoute(request) {
+  const { data, latencyMs } = await decide(
+    { request },
+    {
+      model: {
+        type: 'choice',
+        instructions: 'Choose the least costly model that can complete the task.',
+        criteria: {
+          fast: 'Direct lookups, extraction, short rewrites, translations and small localized changes',
+          powerful:
+            'Design, architecture, multi-step reasoning, root-cause analysis, and high-stakes or ambiguous judgement',
+        },
+      },
+    }
+  );
+
+  const { choice, confidence, cost } = readChoice(data, 'model', ROUTER_TIERS);
+  return { choice, confidence, latencyMs, cost };
+}
