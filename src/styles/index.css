@@ -34,6 +34,14 @@
   --color-pii-jev-ink: #4d5c12;
   --color-pii-jev-pale: #f6fbe4;
   --color-pii-jev-olive: #7a8f1f;
+
+  /* Model Router tab */
+  --color-fast: #2dd4bf;
+  --color-fast-ink: #0f766e;
+  --color-powerful: #a78bfa;
+  --color-powerful-ink: #6d28d9;
+  --color-underpowered: var(--color-block);
+  --color-overspent: var(--color-ask);
 }
 
 @layer base {
