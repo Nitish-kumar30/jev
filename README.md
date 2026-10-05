@@ -11,8 +11,9 @@ to act on. The tabs make that difference visible:
 | --- | --- |
 | **Ticket Sorting Race** | Both engines sort the same 50 customer messages into Billing / Technical / Refund / Spam, side by side, with live timers, cost and accuracy. Jev shows a confidence bar and hands anything below 70% to a human instead of guessing. |
 | **Agent Safety Gate** | Before an AI agent acts, Jev answers allow / ask a human / block, with a confidence value and a plain-English reason. Includes a prompt-injection demo and an honest note about its limits. |
-| **Examples** | Six tasks run both ways: chat completions versus Jev on systemone. Each one shows the typed result beside the Python that defines it. Example 6 splits the job: Jev decides whether to escalate, and the LLM writes the reply. This tab only runs in Live mode. |
 | **PII Detection** | An animated, replayable recreation of the LangChain video "PII Detection with Jev vs LLM". The same question — does this message contain an email address, a phone number or a credit card number? — goes to an LLM, which takes about 5s to write prose plus JSON, and to Jev, which returns three probabilities in about 0.1s. A third scene puts them side by side with a threshold slider. Works in Demo mode; Live mode also accepts your own text. |
+| **Model Router** | The model-routing pattern from LangChain's "Building a harness with Jev". Before each of 24 requests reaches an LLM, Jev answers one `choice` question — fast or powerful — with the instruction "Choose the least costly model that can complete the task." When it is unsure, it picks the powerful one. A running cost race and chart compare it against sending everything to the powerful model, and a threshold slider re-scores the finished run to show the savings-versus-quality trade-off. |
+| **Examples** | Six tasks run both ways: chat completions versus Jev on systemone. Each one shows the typed result beside the Python that defines it. Example 6 splits the job: Jev decides whether to escalate, and the LLM writes the reply. This tab only runs in Live mode. |
 
 ## Run it
 
@@ -29,7 +30,8 @@ each of those panels carries a `Simulated` badge so nothing on screen is
 mistaken for a real result. The Examples tab shows the scenario and the Python
 immediately; Run calls the real APIs and only works in Live mode. The PII
 Detection tab plays scripted answers in Demo mode and asks both models for real
-in Live mode.
+in Live mode. The Model Router streams its 24 requests through a simulated
+router in Demo mode; Live mode makes real Jev routing calls.
 
 ## Scripts
 
@@ -48,6 +50,9 @@ in Live mode.
    OPENROUTER_API_KEY=your-openrouter-key
    JEV_MODEL=typesafe/jev-1.13
    LLM_MODEL=openai/gpt-4o-mini
+   # Model Router: the two models Jev routes between (optional)
+   ROUTER_FAST_MODEL=openai/gpt-4o-mini
+   ROUTER_POWERFUL_MODEL=openai/gpt-4o
    ```
    The key stays on the server. It is never bundled into the browser, and the
    frontend only ever talks to your own `/api/*` routes. `server/.env` is
@@ -82,6 +87,13 @@ Vercel function. There is no Python service.
 - **`server/examples.js`** — the six examples. Chat completions for the prose
   side, `POST /api/v1/systemone` for Jev. Still the same serverless function.
   It exports `askLlm`, `askJev` and `parseJsonFrom` for reuse.
+- **Model Router** — `jevRoute()` in `server/adapters/jev.js` asks one
+  Decisions API `choice` question per request. `llmAnswer()` in
+  `server/adapters/llm.js` answers on `ROUTER_FAST_MODEL` or
+  `ROUTER_POWERFUL_MODEL`, but only when "Answer each request" is switched on
+  in the tab. It is off by default because every call is a real, billed answer
+  (capped at 600 output tokens). With it off, Jev routing is real and model
+  costs are estimated from each request's token counts.
 - **`server/pii.js`** — PII Detection. Calls the LLM and Jev in parallel through
   those same helpers: the LLM writes a sentence and a JSON object, and Jev
   answers three `noul` questions.
@@ -97,7 +109,9 @@ Backend endpoints:
 | `POST /api/jev/gate` | `{ action, fetchedContent? }` | `{ decision, confidence, reason }` |
 | `POST /api/examples/:n` | — (`n` is 1–6) | `{ n, models, rounds }` — each round has `llm` and `jev` rows, latency, and cost |
 | `POST /api/pii` | `{ message }` (required, up to 2,000 characters) | `{ message, llm: { text, structured, parseFailed, ms, cost }, jev: { answers: { has_email, has_phone, has_credit_card }, ms, cost } }` |
-| `GET /api/health` | — | `{ ok, jevKey, llmKey }` |
+| `POST /api/jev/route` | `{ request }` (required, up to 4,000 characters) | `{ choice: 'fast' \| 'powerful', confidence, latencyMs, cost }` |
+| `POST /api/llm/answer` | `{ request, tier: 'fast' \| 'powerful' }` | `{ text, ms, cost, tokens: { in, out }, model }` |
+| `GET /api/health` | — | `{ ok, jevKey, llmKey, routerModels: { fast, powerful } }` |
 
 ## Project structure
 
@@ -119,6 +133,7 @@ src/
     constants.js               EDIT ME: costs, latencies, error rates, threshold
     engines.js                 Demo + live classification engines (one interface)
     gateEngine.js              Demo keyword/amount rule engine for the gate
+    routerEngines.js           Router demo + live engines, pricing, scoreRun()
     random.js                  Seeded PRNG so a race is reproducible
     api.js                     Browser-side client for /api/*
     ModeContext.jsx            Demo/Live state, toasts, demo fallback
@@ -127,6 +142,7 @@ src/
     tickets.js                 The 50 messages with hidden correct labels
     actions.js                 Gate presets + the prompt-injection email
     piiMessages.js             PII presets with scripted demo answers
+    routerRequests.js          24 router requests with hidden tier and token estimates
   tabs/
     race/  useRace.js, RaceTab.jsx, RacePanel.jsx, Bins.jsx,
            ResultsCard.jsx, DetailDrawer.jsx
@@ -135,15 +151,19 @@ src/
     pii/   PiiTab.jsx, usePiiPlayback.js (the timeline, as data),
            ScenePanel.jsx, LlmResult.jsx, JevResult.jsx, ProbabilityBar.jsx,
            SideBySide.jsx, format.js
+    router/  RouterTab.jsx, useRouter.js, RequestQueue.jsx, Lanes.jsx,
+             CostRace.jsx (totals + cumulative SVG chart), RouterSummary.jsx,
+             RouteDrawer.jsx, theme.js
 api/
   index.js                     Vercel entry; exports the Express app
 server/
-  app.js                       Express routes: health, classify, gate, examples, pii
+  app.js                       Express routes: health, classify, gate, examples, pii,
+                               jev/route, llm/answer
   examples.js                  Six Jev-vs-chat runs via systemone + chat completions
   pii.js                       PII Detection: LLM and Jev in parallel
   index.js                     Local listener only (loads server/.env)
-  adapters/jev.js              OpenRouter Decisions API (Jev)
-  adapters/llm.js              OpenRouter chat completions (chatbot)
+  adapters/jev.js              OpenRouter Decisions API (Jev), incl. jevRoute()
+  adapters/llm.js              OpenRouter chat completions (chatbot), incl. llmAnswer()
   .env.example                 Copy to server/.env and paste keys here
 ```
 
@@ -157,6 +177,23 @@ LATENCY_MS = { llm: {min: 900, max: 1800}, jev: {min: 8, max: 40} };
 ERROR_RATE = { llm: 0.08, jev: 0.04 };             // share answered wrongly
 CONFIDENCE_THRESHOLD = 0.7;                        // below this: ask a human
 ```
+
+The Model Router has its own block in the same file:
+
+```js
+ROUTER_PRICES = { fast: { in: 0.15, out: 0.6 }, powerful: { in: 3, out: 15 } }; // USD per 1M tokens
+ROUTER_LATENCY_MS = { fast: { min: 400, max: 900 }, powerful: { min: 2000, max: 6000 } };
+ROUTER_JEV = { costPerDecision: 0.00001, latencyMs: { min: 8, max: 40 } };
+ROUTER_ERROR_RATE = 0.05;         // demo: share of clear requests routed wrongly
+ROUTER_FALLBACK_THRESHOLD = 0.7;  // starting value of the slider; below it → powerful
+ROUTER_MODELS = { fast: 'openai/gpt-4o-mini', powerful: 'openai/gpt-4o' }; // demo lane names
+```
+
+A request costs `tokens.in × input price + tokens.out × output price` on the
+model it went to, plus one Jev decision. Nothing in the tab is hardcoded: every
+total, ratio and count is computed from these constants and
+`src/data/routerRequests.js` (24 requests: 13 clearly fast, 7 clearly powerful,
+4 borderline).
 
 The dataset is `src/data/tickets.js` — 50 messages, 7 deliberately ambiguous
 (e.g. *"charged twice and the app crashed"*) and 5 tricky spam-vs-real cases.
@@ -177,6 +214,16 @@ The dataset is `src/data/tickets.js` — 50 messages, 7 deliberately ambiguous
 - **Jev returns probabilities only, not an explanation.** The LLM's sentence
   says why; Jev's three numbers do not. If you need a reason a person can read,
   you still need something that writes text.
+- **Model Router prices and demo error rates are illustrative.** The list
+  prices, latencies and the 5% misroute rate are constants, not measurements.
+  In Live mode the "everything → powerful" baseline is estimated from token
+  counts at list price, except where the powerful model really answered.
+- **Routing only saves money if the fast model can really handle what it is
+  given.** That is what the Underpowered count is for: each one is a hard
+  request sent to the cheap model, which is a quality risk, not a saving. A
+  higher fallback threshold buys fewer of them at the cost of smaller savings.
+  Savings are also bounded by the mix: on this dataset the hard requests carry
+  most of the spend, so even perfect routing saves about 21%.
 - **Decision models can be influenced by malicious content.** The gate's
   "Sneaky email" preset demonstrates this deliberately. Do not let fetched
   content authorize its own actions, and keep a human in the loop for
@@ -189,4 +236,6 @@ Real `tablist` / `dialog` / `switch` semantics, keyboard operable throughout
 rings, live regions for results, and full `prefers-reduced-motion` support —
 the particle field freezes and card flights become fades. In PII Detection,
 Space plays and pauses when the tab panel is focused, and with reduced motion
-each step appears whole instead of streaming or typing.
+each step appears whole instead of streaming or typing. In Model Router, cards
+fade into their lane instead of flying, the thresholds are labelled sliders,
+and the request drawer closes with `Esc`.
