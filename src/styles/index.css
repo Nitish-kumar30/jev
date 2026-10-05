@@ -25,6 +25,15 @@
   --color-allow: #22c55e;
   --color-ask: #eab308;
   --color-block: #ef4444;
+
+  /* PII Detection tab, after the LangChain video */
+  --color-pii-llm: #38bdf8;
+  --color-pii-llm-ink: #0369a1;
+  --color-pii-llm-pale: #eef8fe;
+  --color-pii-jev: #c6f432;
+  --color-pii-jev-ink: #4d5c12;
+  --color-pii-jev-pale: #f6fbe4;
+  --color-pii-jev-olive: #7a8f1f;
 }
 
 @layer base {
