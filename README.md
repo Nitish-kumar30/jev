@@ -11,7 +11,8 @@ to act on. The tabs make that difference visible:
 | --- | --- |
 | **Ticket Sorting Race** | Both engines sort the same 50 customer messages into Billing / Technical / Refund / Spam, side by side, with live timers, cost and accuracy. Jev shows a confidence bar and hands anything below 70% to a human instead of guessing. |
 | **Agent Safety Gate** | Before an AI agent acts, Jev answers allow / ask a human / block, with a confidence value and a plain-English reason. Includes a prompt-injection demo and an honest note about its limits. |
-| **Examples** | Six tasks run both ways: chat completions versus Jev on systemone. Each one shows the typed result beside the Python that defines it. Example 6 is the case where Jev is the wrong tool. This tab only runs in Live mode. |
+| **Examples** | Six tasks run both ways: chat completions versus Jev on systemone. Each one shows the typed result beside the Python that defines it. Example 6 splits the job: Jev decides whether to escalate, and the LLM writes the reply. This tab only runs in Live mode. |
+| **PII Detection** | An animated, replayable recreation of the LangChain video "PII Detection with Jev vs LLM". The same question — does this message contain an email address, a phone number or a credit card number? — goes to an LLM, which takes about 5s to write prose plus JSON, and to Jev, which returns three probabilities in about 0.1s. A third scene puts them side by side with a threshold slider. Works in Demo mode; Live mode also accepts your own text. |
 
 ## Run it
 
@@ -26,7 +27,9 @@ Open <http://localhost:5173>. That's it — **Demo mode needs no backend, no API
 keys and no network.** The race and the gate are simulated in the browser, and
 each of those panels carries a `Simulated` badge so nothing on screen is
 mistaken for a real result. The Examples tab shows the scenario and the Python
-immediately; Run calls the real APIs and only works in Live mode.
+immediately; Run calls the real APIs and only works in Live mode. The PII
+Detection tab plays scripted answers in Demo mode and asks both models for real
+in Live mode.
 
 ## Scripts
 
@@ -78,6 +81,10 @@ Vercel function. There is no Python service.
 - **`server/adapters/llm.js`** — chat completions for the chatbot side.
 - **`server/examples.js`** — the six examples. Chat completions for the prose
   side, `POST /api/v1/systemone` for Jev. Still the same serverless function.
+  It exports `askLlm`, `askJev` and `parseJsonFrom` for reuse.
+- **`server/pii.js`** — PII Detection. Calls the LLM and Jev in parallel through
+  those same helpers: the LLM writes a sentence and a JSON object, and Jev
+  answers three `noul` questions.
 
 The classify and gate adapters return a normalised shape, documented in their JSDoc.
 
@@ -89,6 +96,7 @@ Backend endpoints:
 | `POST /api/llm/classify` | `{ message }` | `{ label, confidence: null, latencyMs }` |
 | `POST /api/jev/gate` | `{ action, fetchedContent? }` | `{ decision, confidence, reason }` |
 | `POST /api/examples/:n` | — (`n` is 1–6) | `{ n, models, rounds }` — each round has `llm` and `jev` rows, latency, and cost |
+| `POST /api/pii` | `{ message }` (required, up to 2,000 characters) | `{ message, llm: { text, structured, parseFailed, ms, cost }, jev: { answers: { has_email, has_phone, has_credit_card }, ms, cost } }` |
 | `GET /api/health` | — | `{ ok, jevKey, llmKey }` |
 
 ## Project structure
@@ -118,16 +126,21 @@ src/
   data/
     tickets.js                 The 50 messages with hidden correct labels
     actions.js                 Gate presets + the prompt-injection email
+    piiMessages.js             PII presets with scripted demo answers
   tabs/
     race/  useRace.js, RaceTab.jsx, RacePanel.jsx, Bins.jsx,
            ResultsCard.jsx, DetailDrawer.jsx
     gate/  GateTab.jsx, TrafficLight.jsx, ConfidenceGauge.jsx, AuditLog.jsx
     examples/  ExamplesTab.jsx, CodePanel.jsx, snippets.js, highlight.js
+    pii/   PiiTab.jsx, usePiiPlayback.js (the timeline, as data),
+           ScenePanel.jsx, LlmResult.jsx, JevResult.jsx, ProbabilityBar.jsx,
+           SideBySide.jsx, format.js
 api/
   index.js                     Vercel entry; exports the Express app
 server/
-  app.js                       Express routes: health, classify, gate, examples
+  app.js                       Express routes: health, classify, gate, examples, pii
   examples.js                  Six Jev-vs-chat runs via systemone + chat completions
+  pii.js                       PII Detection: LLM and Jev in parallel
   index.js                     Local listener only (loads server/.env)
   adapters/jev.js              OpenRouter Decisions API (Jev)
   adapters/llm.js              OpenRouter chat completions (chatbot)
@@ -157,6 +170,13 @@ The dataset is `src/data/tickets.js` — 50 messages, 7 deliberately ambiguous
 - The race reports **engine time** (time spent classifying) alongside wall
   clock, so the speed-up ratio is not distorted by this page's own animation
   work. Both are measured at run time; nothing is hardcoded.
+- **PII Detection demo timings come from the LangChain video, not from
+  measurement.** In Demo mode the 5.0s and 0.1s are the figures shown in "PII
+  Detection with Jev vs LLM", and the answers are scripted. In Live mode each
+  timer stops at the latency measured for that request.
+- **Jev returns probabilities only, not an explanation.** The LLM's sentence
+  says why; Jev's three numbers do not. If you need a reason a person can read,
+  you still need something that writes text.
 - **Decision models can be influenced by malicious content.** The gate's
   "Sneaky email" preset demonstrates this deliberately. Do not let fetched
   content authorize its own actions, and keep a human in the loop for
@@ -167,4 +187,6 @@ The dataset is `src/data/tickets.js` — 50 messages, 7 deliberately ambiguous
 Real `tablist` / `dialog` / `switch` semantics, keyboard operable throughout
 (arrow keys between tabs, `Esc` closes the drawer and menus), visible focus
 rings, live regions for results, and full `prefers-reduced-motion` support —
-the particle field freezes and card flights become fades.
+the particle field freezes and card flights become fades. In PII Detection,
+Space plays and pauses when the tab panel is focused, and with reduced motion
+each step appears whole instead of streaming or typing.

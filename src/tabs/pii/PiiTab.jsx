@@ -5,9 +5,10 @@ import LlmResult from './LlmResult.jsx';
 import JevResult from './JevResult.jsx';
 import SideBySide from './SideBySide.jsx';
 import { usePiiPlayback } from './usePiiPlayback.js';
-import { formatSeconds } from './format.js';
+import { formatCost, formatSeconds } from './format.js';
 import { PII_FIELDS, PII_INSTRUCTIONS, PII_PRESETS, demoResultFor } from '../../data/piiMessages.js';
 import { useMode } from '../../lib/ModeContext.jsx';
+import { detectPii } from '../../lib/api.js';
 import { usePrefersReducedMotion } from '../../lib/useReducedMotion.js';
 
 const SCENE_NAMES = ['How an LLM answers', 'How Jev answers', 'Side by side'];
@@ -18,24 +19,69 @@ const INTERACTIVE = 'button, input, textarea, select, a, [role="switch"], [role=
  * an animated scene after the LangChain video "PII Detection with Jev vs LLM".
  */
 export default function PiiTab({ light = false }) {
-  const { isDemo, isLive } = useMode();
+  const { isDemo, isLive, fallbackToDemo } = useMode();
   const reduced = usePrefersReducedMotion();
   const [presetId, setPresetId] = useState(PII_PRESETS[0].id);
   const [custom, setCustom] = useState('');
   const [threshold, setThreshold] = useState(0.5);
+  const [liveResult, setLiveResult] = useState(null);
+  const [loading, setLoading] = useState(false);
   const rootRef = useRef(null);
 
   const preset = PII_PRESETS.find((p) => p.id === presetId) ?? PII_PRESETS[0];
-  const result = useMemo(() => demoResultFor(preset), [preset]);
-  const simulated = result.simulated;
+  const demoResult = useMemo(() => demoResultFor(preset), [preset]);
+  const result = liveResult ?? demoResult;
+  const simulated = !liveResult;
 
   const playback = usePiiPlayback({ llmMs: result.llm.ms, jevMs: result.jev.ms, reduced });
   const { progress, sceneIndex, playing, started, done, toggle, replay, goToScene, skipToEnd, play, reset } = playback;
 
+  // Live: ask both models first, then play the same scenes with the timers
+  // stopping at the measured latency. Any failure falls back to the preset.
+  const runLive = useCallback(
+    async (message) => {
+      reset();
+      setLoading(true);
+      try {
+        const res = await detectPii(message);
+        setLiveResult({ ...res, simulated: false });
+        play();
+      } catch (err) {
+        // Drops to Demo mode; the preset's first frame and Play button come back.
+        fallbackToDemo(`Live PII request failed: ${err.message}`);
+        setLiveResult(null);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [reset, play, fallbackToDemo]
+  );
+
+  // Back in Demo mode, drop any live answer and show the preset again.
+  useEffect(() => {
+    if (!isLive) {
+      setLiveResult(null);
+      reset();
+    }
+  }, [isLive, reset]);
+
   const pickPreset = (id) => {
     setPresetId(id);
+    setLiveResult(null);
     reset();
   };
+
+  /** Play, except that a fresh Live run fetches real answers first. */
+  const start = useCallback(() => {
+    if (loading) return;
+    if (isLive && !liveResult) runLive(preset.message);
+    else play();
+  }, [loading, isLive, liveResult, runLive, preset.message, play]);
+
+  const toggleOrStart = useCallback(() => {
+    if (!playing && !started && isLive && !liveResult) start();
+    else toggle();
+  }, [playing, started, isLive, liveResult, start, toggle]);
 
   // Space toggles play/pause while focus is on the tab panel or the stage,
   // but never steals Space from a button, input or link.
@@ -47,11 +93,11 @@ export default function PiiTab({ light = false }) {
       const inside = el === panel || (rootRef.current && rootRef.current.contains(el));
       if (!inside || (el && el !== panel && el.matches(INTERACTIVE))) return;
       e.preventDefault();
-      toggle();
+      toggleOrStart();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [toggle]);
+  }, [toggleOrStart]);
 
   const s1 = (id) => progress(0, id);
   const s2 = (id) => progress(1, id);
@@ -70,7 +116,7 @@ export default function PiiTab({ light = false }) {
       : '',
     s2('caption') >= 1
       ? `Jev answered in ${formatSeconds(result.jev.ms)}: ${PII_FIELDS.map(
-          ({ key }) => `${key} ${result.jev.answers[key]?.toFixed?.(2) ?? 'n/a'}`
+          ({ key }) => `${key} ${typeof result.jev.answers[key] === 'number' ? result.jev.answers[key].toFixed(2) : 'n/a'}`
         ).join(', ')}.`
       : '',
   ]
@@ -93,7 +139,9 @@ export default function PiiTab({ light = false }) {
       number="01"
       title={SCENE_NAMES[0]}
       timer={llmTimer}
-      caption={`${formatSeconds(result.llm.ms)} for text and structured output`}
+      caption={`${formatSeconds(result.llm.ms)} for text and structured output${
+        result.llm.cost != null ? ` · ${formatCost(result.llm.cost)}` : ''
+      }`}
       captionProgress={s1('caption')}
       arrowProgress={s1('arrow')}
       rightHeader="LLM"
@@ -124,7 +172,9 @@ export default function PiiTab({ light = false }) {
       number="02"
       title={SCENE_NAMES[1]}
       timer={jevTimer}
-      caption={`${formatSeconds(result.jev.ms)} for three probabilities`}
+      caption={`${formatSeconds(result.jev.ms)} for three probabilities${
+        result.jev.cost != null ? ` · ${formatCost(result.jev.cost)}` : ''
+      }`}
       captionProgress={s2('caption')}
       arrowProgress={s2('arrow')}
       rightHeader="jev // noul"
@@ -182,7 +232,14 @@ export default function PiiTab({ light = false }) {
 
       <PresetPicker light={light} presetId={presetId} onPick={pickPreset} />
 
-      <LiveTextBox light={light} enabled={isLive} value={custom} onChange={setCustom} />
+      <LiveTextBox
+        light={light}
+        enabled={isLive}
+        value={custom}
+        onChange={setCustom}
+        onSubmit={runLive}
+        busy={loading}
+      />
 
       <Controls
         light={light}
@@ -190,7 +247,7 @@ export default function PiiTab({ light = false }) {
         started={started}
         done={done}
         sceneIndex={sceneIndex}
-        onToggle={toggle}
+        onToggle={toggleOrStart}
         onReplay={replay}
         onScene={goToScene}
         onSkip={skipToEnd}
@@ -213,11 +270,20 @@ export default function PiiTab({ light = false }) {
           </motion.div>
         </AnimatePresence>
 
-        {!started && !playing ? (
+        {loading ? (
+          <div
+            className={`absolute inset-0 grid place-items-center rounded-3xl ${light ? 'bg-[#F7F5F0]/70' : 'bg-black/40'}`}
+            role="status"
+          >
+            <span className={`font-mono text-sm ${light ? 'text-[#141B2E]' : 'text-slate-100'}`}>
+              Asking the LLM and Jev…
+            </span>
+          </div>
+        ) : !started && !playing ? (
           <div className="absolute inset-0 grid place-items-center rounded-3xl">
             <button
               type="button"
-              onClick={play}
+              onClick={start}
               aria-label="Play the PII detection scene"
               className={`flex items-center gap-3 rounded-full px-7 py-4 text-sm font-bold uppercase tracking-[0.16em] shadow-xl ${
                 light
@@ -238,7 +304,9 @@ export default function PiiTab({ light = false }) {
       <p className={`text-center text-[11px] ${light ? 'text-[#3E4A5C]' : 'text-slate-500'}`}>
         {isDemo
           ? 'Demo mode: scripted answers, with the 5.0s and 0.1s timings shown in the LangChain video. Not a measurement.'
-          : 'Live mode: both models answer for real; the timers stop at the measured latency.'}
+          : liveResult
+            ? 'Live mode: real answers. Each timer stops at the measured latency, and the cost is what OpenRouter reported.'
+            : 'Live mode: press Play to ask both models for real.'}
       </p>
     </div>
   );

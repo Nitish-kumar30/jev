@@ -141,7 +141,7 @@ async function post(url, payload) {
   return { body, ms: Date.now() - started };
 }
 
-async function askLlm(prompt, maxTokens = 500) {
+export async function askLlm(prompt, maxTokens = 500) {
   const { body, ms } = await post(CHAT_URL, {
     model: LLM_MODEL(),
     usage: { include: true },
@@ -152,7 +152,7 @@ async function askLlm(prompt, maxTokens = 500) {
   return { text, ms, cost: body?.usage?.cost ?? null };
 }
 
-async function askJev(state, questions) {
+export async function askJev(state, questions) {
   const { body, ms } = await post(SYSTEMONE_URL, {
     model: JEV_EXAMPLES_MODEL,
     state,

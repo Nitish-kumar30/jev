@@ -10,6 +10,7 @@ import cors from 'cors';
 import { hasJevKey, jevClassify, jevGate } from './adapters/jev.js';
 import { hasLlmKey, llmClassify } from './adapters/llm.js';
 import { openRouterKey, runExample } from './examples.js';
+import { detectPii, PII_MAX_CHARS } from './pii.js';
 
 const app = express();
 app.use(cors());
@@ -59,6 +60,19 @@ app.post('/api/examples/:n', requireKey(() => Boolean(openRouterKey()), 'OPENROU
   }
   try {
     res.json(await runExample(n));
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+app.post('/api/pii', requireKey(() => Boolean(openRouterKey()), 'OPENROUTER_API_KEY'), async (req, res) => {
+  const message = asText(req.body?.message);
+  if (!message) return res.status(400).json({ error: 'message is required' });
+  if (message.length > PII_MAX_CHARS) {
+    return res.status(400).json({ error: `message must be ${PII_MAX_CHARS.toLocaleString('en-US')} characters or fewer` });
+  }
+  try {
+    res.json(await detectPii(message));
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
