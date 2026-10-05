@@ -33,6 +33,8 @@ export const classifyWithLlm = (message) => request('/api/llm/classify', { messa
 export const gateWithJev = (payload) => request('/api/jev/gate', payload);
 export const runExample = (n) => request(`/api/examples/${n}`, {});
 export const detectPii = (message) => request('/api/pii', { message });
+export const routeWithJev = (text) => request('/api/jev/route', { request: text });
+export const answerWithModel = (text, tier) => request('/api/llm/answer', { request: text, tier });
 
 /**
  * Used before switching to Live mode: confirms the backend is up and that it
