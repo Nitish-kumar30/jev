@@ -53,6 +53,8 @@ router in Demo mode; Live mode makes real Jev routing calls.
    # Model Router: the two models Jev routes between (optional)
    ROUTER_FAST_MODEL=openai/gpt-4o-mini
    ROUTER_POWERFUL_MODEL=openai/gpt-4o
+   # Deployed site only. Set the same value in Vercel as SITE_PASSWORD.
+   SITE_PASSWORD=your-shared-password
    ```
    The key stays on the server. It is never bundled into the browser, and the
    frontend only ever talks to your own `/api/*` routes. `server/.env` is
@@ -64,7 +66,17 @@ On Vercel, the same routes run as one serverless function in this project. You
 do not deploy a second backend. In the Vercel project settings, add
 `OPENROUTER_API_KEY` (and optionally `JEV_MODEL` and `LLM_MODEL`), then
 redeploy. The project root must be the folder that contains `package.json`
-and `api/`. After deploy, `https://<your-app>/api/health` should return JSON.
+and `api/`.
+
+The deployment is password-gated by `middleware.js`. In those same Vercel
+settings, add `SITE_PASSWORD` (see `server/.env.example`) for Production and
+Preview, then redeploy.
+Until a visitor enters that password, the site, its static files, and
+`/api/*` stay locked. A correct password sets a signed cookie that lasts 7
+days. If `SITE_PASSWORD` is missing, the deployment stays locked and the page
+says so. `npm run dev` does not run this middleware, so local Demo mode stays
+open. After you pass the gate, `https://<your-app>/api/health` should return
+JSON.
 
 If the backend is not running, or the key is missing, or a request fails, the
 app shows a toast and drops back to Demo mode rather than breaking.
@@ -117,6 +129,7 @@ Backend endpoints:
 
 ```
 index.html                     Fonts, favicon, mount point
+middleware.js                  Deployment password gate (Vercel only)
 vite.config.js                 Vite + Tailwind, /api proxy for local dev
 vercel.json                    Sends /api/* to the serverless function
 src/
